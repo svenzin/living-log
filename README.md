@@ -1,0 +1,4 @@
+living-log
+==========
+
+Activity logger
