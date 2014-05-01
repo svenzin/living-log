@@ -7,13 +7,45 @@ using System.Text;
 using System.Threading.Tasks;
 
 using System.Windows.Forms;
+using System.Drawing;
 
 namespace living_log_cli
 {
-    public interface Data { }
+    public interface Data { string ToString(); }
+    public class MouseButtonData : Data
+    {
+        public MouseButtons Button;
+        public MouseButtonData(MouseEventExtArgs e) { Button = e.Button; }
+        public override string ToString() { return Button.ToString(); }
+    }
+    public class MouseWheelData : Data
+    {
+        public int Delta;
+        public MouseWheelData(MouseEventExtArgs e) { Delta = e.Delta; }
+        public override string ToString() { return Delta.ToString(); }
+    }
+    public class MouseMoveData : Data
+    {
+        public int X;
+        public int Y;
+        public MouseMoveData(MouseEventExtArgs e) { X = e.X; Y = e.Y; }
+        public override string ToString() { return "(" + X.ToString() + ", " + Y.ToString() + ")"; }
+    }
+    public class KeyboardKeyData : Data
+    {
+        public Keys Key;
+        public KeyboardKeyData(KeyEventArgsExt e) { Key = e.KeyCode; }
+        public override string ToString() { return Key.ToString(); }
+    }
+    public class KeyboardPressData : Data
+    {
+        public char Character;
+        public KeyboardPressData(KeyPressEventArgsExt e) { Character = e.KeyChar; }
+        public override string ToString() { return Character.ToString(); }
+    }
     public class Activity
     {
-        public int Timestamp;
+        public long Timestamp;
         public string Name;
         public Data Info;
     }
@@ -51,60 +83,56 @@ namespace living_log_cli
             m_timer.Enabled = true;
         }
 
+        private void Act(string name, Data info)
+        {
+            m_activityList.Add(new Activity() { Timestamp = DateTime.UtcNow.Ticks, Name = name, Info = info });
+        }
+
         private void OnTick(object sender, EventArgs e)
         {
             using (var file = new System.IO.StreamWriter(@"C:\ActivityLog.txt", true))
             {
-                m_activityList.ForEach((a) => { file.WriteLine(a.Timestamp.ToString() + " " + a.Name); });
+                m_activityList.ForEach((a) => { file.WriteLine(a.Timestamp.ToString() + " " + a.Name + " " + a.Info.ToString()); });
                 m_activityList.Clear();
             }
         }
 
         private void OnMouseMove(object sender, MouseEventExtArgs e)
         {
-            var args = e as MouseEventExtArgs;
-            m_activityList.Add(new Activity() { Timestamp = args.Timestamp, Name = "MouseMove" });
+            Act("MouseMove", new MouseMoveData(e));
         }
         private void OnMouseDown(object sender, MouseEventExtArgs e)
         {
-            var args = e as MouseEventExtArgs;
-            m_activityList.Add(new Activity() { Timestamp = args.Timestamp, Name = "MouseDown" });
+            Act("MouseDown", new MouseButtonData(e));
         }
         private void OnMouseUp(object sender, MouseEventArgs e)
         {
-            var args = e as MouseEventExtArgs;
-            m_activityList.Add(new Activity() { Timestamp = args.Timestamp, Name = "MouseUp" });
+            Act("MouseUp", new MouseButtonData(e as MouseEventExtArgs));
         }
         private void OnMouseClick(object sender, MouseEventExtArgs e)
         {
-            var args = e as MouseEventExtArgs;
-            m_activityList.Add(new Activity() { Timestamp = args.Timestamp, Name = "MouseClick" });
+            Act("MouseClick", new MouseButtonData(e));
         }
         private void OnMouseDoubleClick(object sender, MouseEventArgs e)
         {
-            var args = e as MouseEventExtArgs;
-            m_activityList.Add(new Activity() { Timestamp = args.Timestamp, Name = "MouseDoubleClick" });
+            Act("MouseDoubleClick", new MouseButtonData(e as MouseEventExtArgs));
         }
         private void OnMouseWheel(object sender, MouseEventArgs e)
         {
-            var args = e as MouseEventExtArgs;
-            m_activityList.Add(new Activity() { Timestamp = args.Timestamp, Name = "MouseWheel" });
+            Act("MouseWheel", new MouseWheelData(e as MouseEventExtArgs));
         }
 
         private void OnKeyUp(object sender, System.Windows.Forms.KeyEventArgs e)
         {
-            var args = e as KeyEventArgsExt;
-            m_activityList.Add(new Activity() { Timestamp = args.Timestamp, Name = "KeyUp" });
+            Act("KeyUp", new KeyboardKeyData(e as KeyEventArgsExt));
         }
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
-            var args = e as KeyEventArgsExt;
-            m_activityList.Add(new Activity() { Timestamp = args.Timestamp, Name = "KeyDown" });
+            Act("KeyDown", new KeyboardKeyData(e as KeyEventArgsExt));
         }
         private void OnKeyPress(object sender, KeyPressEventArgs e)
         {
-            var args = e as KeyPressEventArgsExt;
-            m_activityList.Add(new Activity() { Timestamp = args.Timestamp, Name = "KeyPress" });
+            Act("KeyPress", new KeyboardPressData(e as KeyPressEventArgsExt));
         }
 
         Timer m_timer;
