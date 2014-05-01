@@ -53,12 +53,44 @@ namespace living_log_cli
     {
         static void Main(string[] args)
         {
+            string filename;
+            if (args.Length == 0)
+            {
+                filename = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\living-log.log";
+            }
+            else if (args.Length == 2 && args[0] == "-log")
+            {
+                filename = args[1];
+            }
+            else
+            {
+                Help();
+                return;
+            }
+
+            Console.WriteLine("Using " + filename + " as log file");
+
             System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.BelowNormal;
-            Program p = new Program();
+            Program p = new Program(filename);
             System.Windows.Forms.Application.Run();
         }
 
-        Program()
+        static void Help()
+        {
+            Console.WriteLine(
+@"
+living-log-cli
+
+Starts a keyboard and mouse activity logger
+
+Command: living-log-cli [-log LOG]
+
+Options: -log LOG Uses the file LOG as log for the activity
+                  Default is ""My Documents""\living-log.log"
+            );
+        }
+        
+        Program(string filename)
         {
             m_activityList = new List<Activity>();
 
@@ -81,6 +113,8 @@ namespace living_log_cli
             m_timer.Interval = 1000 * 60; // 1 minute
             m_timer.Tick += OnTick;
             m_timer.Enabled = true;
+
+            m_filename = filename;
         }
 
         private void Act(string name, Data info)
@@ -90,7 +124,7 @@ namespace living_log_cli
 
         private void OnTick(object sender, EventArgs e)
         {
-            using (var file = new System.IO.StreamWriter(@"C:\ActivityLog.txt", true))
+            using (var file = new System.IO.StreamWriter(m_filename, true))
             {
                 m_activityList.ForEach((a) => { file.WriteLine(a.Timestamp.ToString() + " " + a.Name + " " + a.Info.ToString()); });
                 m_activityList.Clear();
@@ -136,6 +170,7 @@ namespace living_log_cli
         }
 
         Timer m_timer;
+        string m_filename;
 
         MouseHookListener m_mouse;
         KeyboardHookListener m_keyboard;
