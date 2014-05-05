@@ -100,42 +100,21 @@ Options: -log LOG     Uses the file LOG as log for the activity
             System.Windows.Forms.Application.Run();
         }
 
-
-        public class LivingLogger : Logger
-        {
-            public class SyncData : IData
-            {
-                public string Version;
-                public DateTime Timestamp;
-                public override string ToString() { return Timestamp.ToString(Constants.SyncFormat) + " " + Version; }
-            }
-            
-            public LivingLogger(int syncDelay)
-            {
-                m_sync = new Timer();
-                m_sync.Interval = syncDelay;
-                m_sync.Tick += (s, e) => { Invoke(Categories.LivingLog_Sync, new SyncData() { Timestamp = DateTime.UtcNow, Version = "1" }); };
-                m_sync.Enabled = true;
-            }
-
-            private Timer m_sync;
-        }
-
         Program(string filename)
         {
             m_activityList = new List<Activity>();
 
             m_previous = new Timestamp(DateTime.UtcNow);
-            Act(Categories.LivingLog_Startup, new LivingLogger.SyncData() { Timestamp = DateTime.UtcNow, Version = "1" });
+
+            m_living = new LivingLogger(Constants.SyncDelayInMs);
+            m_living.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
+            m_living.Start();
 
             m_mouse = new MouseLogger();
             m_mouse.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
 
             m_keyboard = new KeyboardLogger();
             m_keyboard.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
-
-            m_living = new LivingLogger(Constants.SyncDelayInMs);
-            m_living.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
 
             m_dumpTimer = new Timer();
             m_dumpTimer.Interval = Constants.DumpDelayInMs;
@@ -148,18 +127,9 @@ Options: -log LOG     Uses the file LOG as log for the activity
         private bool ForceExit()
         {
             m_dumpTimer.Enabled = false;
-
-            Act(Categories.LivingLog_Exit, new LivingLogger.SyncData() { Timestamp = DateTime.UtcNow, Version = "1" });
+            m_living.Stop();
             OnTick(null, null);
             return true;
-        }
-
-        private void Act(Category type, IData info)
-        {
-            lock (locker)
-            {
-                m_activityList.Add(new Activity() { Timestamp = new Timestamp(DateTime.UtcNow), Type = type, Info = info });
-            }
         }
 
         private void OnTick(object sender, EventArgs e)
