@@ -108,17 +108,19 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
             m_living = new LivingLogger(Constants.SyncDelayInMs);
             m_living.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
-            m_living.Start();
+            m_living.Enabled = true;
 
             m_mouse = new MouseLogger();
             m_mouse.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
+            m_mouse.Enabled = true;
 
             m_keyboard = new KeyboardLogger();
             m_keyboard.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
+            m_keyboard.Enabled = true;
 
             m_dumpTimer = new Timer();
             m_dumpTimer.Interval = Constants.DumpDelayInMs;
-            m_dumpTimer.Tick += OnTick;
+            m_dumpTimer.Tick += (s, e) => { Dump(); };
             m_dumpTimer.Enabled = true;
 
             m_filename = filename;
@@ -127,12 +129,14 @@ Options: -log LOG     Uses the file LOG as log for the activity
         private bool ForceExit()
         {
             m_dumpTimer.Enabled = false;
-            m_living.Stop();
-            OnTick(null, null);
+            m_keyboard.Enabled = false;
+            m_mouse.Enabled = false;
+            m_living.Enabled = false;
+            Dump();
             return true;
         }
 
-        private void OnTick(object sender, EventArgs e)
+        private void Dump()
         {
             Console.WriteLine("Writing " + m_activityList.Count + " activities");
             lock (locker)

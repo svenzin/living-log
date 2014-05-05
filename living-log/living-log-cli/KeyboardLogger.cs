@@ -35,7 +35,10 @@ namespace living_log_cli
             m_keyboard.KeyUp += (s, e) => { Invoke(Categories.Keyboard_KeyUp, new KeyboardKeyData(e as KeyEventArgsExt)); };
             m_keyboard.KeyDown += (s, e) => { Invoke(Categories.Keyboard_KeyDown, new KeyboardKeyData(e as KeyEventArgsExt)); };
             m_keyboard.KeyPress += (s, e) => { Invoke(Categories.Keyboard_KeyPress, new KeyboardPressData(e as KeyPressEventArgsExt)); };
-            m_keyboard.Enabled = true;
+            m_keyboard.Enabled = this.Enabled;
         }
+
+        protected override void Enable() { m_keyboard.Enabled = this.Enabled; }
+        protected override void Disable() { m_keyboard.Enabled = this.Enabled; }
     }
 }

@@ -67,6 +67,7 @@
     <Compile Include="Categories.cs" />
     <Compile Include="Constants.cs" />
     <Compile Include="KeyboardLogger.cs" />
+    <Compile Include="LivingLogger.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="MouseLogger.cs" />
     <Compile Include="Program.cs" />
