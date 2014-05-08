@@ -96,7 +96,12 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
             System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.BelowNormal;
             Program p = new Program(Constants.LogFilename);
-            SetExitHandler((t) => { return p.ForceExit(); });
+            var exitCallback = new HandlerRoutine((t) =>
+            {
+                p.ForceExit();
+                return true;
+            });
+            SetExitHandler(exitCallback);
             System.Windows.Forms.Application.Run();
         }
 
@@ -126,14 +131,13 @@ Options: -log LOG     Uses the file LOG as log for the activity
             m_filename = filename;
         }
 
-        private bool ForceExit()
+        private void ForceExit()
         {
             m_dumpTimer.Enabled = false;
             m_keyboard.Enabled = false;
             m_mouse.Enabled = false;
             m_living.Enabled = false;
             Dump();
-            return true;
         }
 
         private void Dump()
