@@ -25,7 +25,12 @@ namespace living_log_cli
             CTRL_LOGOFF_EVENT = 5,
             CTRL_SHUTDOWN_EVENT
         }
-        public static bool SetExitHandler(HandlerRoutine handler) { return SetConsoleCtrlHandler(handler, true); }
+        private static HandlerRoutine exitHandler = null;
+        public static bool SetExitHandler(HandlerRoutine handler)
+        {
+            exitHandler = handler;
+            return SetConsoleCtrlHandler(exitHandler, true);
+        }
        
         #endregion
 
@@ -96,12 +101,11 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
             System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.BelowNormal;
             Program p = new Program(Constants.LogFilename);
-            var exitCallback = new HandlerRoutine((t) =>
+            SetExitHandler((t) =>
             {
                 p.ForceExit();
                 return true;
             });
-            SetExitHandler(exitCallback);
             System.Windows.Forms.Application.Run();
         }
 
