@@ -149,28 +149,53 @@ Options: -log LOG     Uses the file LOG as log for the activity
             Console.WriteLine("Writing " + m_activityList.Count + " activities");
             lock (locker)
             {
-                using (var writer = new StreamWriter(new FileStream(m_filename, FileMode.Append)))
+                try
                 {
-                    WriteText(writer);
-                    m_activityList.Clear();
+                    using (var writer = new StreamWriter(new FileStream(m_filename, FileMode.Append)))
+                    {
+                        if (WriteText(writer))
+                        {
+                            m_activityList.Clear();
+                        }
+                    }
+                }
+                catch (IOException e)
+                {
+                    // Most likely to be the output file already in use
+                    // Just keep storing Activities until we can access the file
                 }
             }
         }
 
         private Timestamp m_previous;
-        private void WriteText(TextWriter writer)
+        private bool WriteText(TextWriter writer)
         {
-            m_activityList.ForEach((a) =>
+            Timestamp previous = m_previous;
+            using (var text = new StringWriter())
             {
-                writer.Write(a.Timestamp - m_previous);
-                writer.Write(" ");
-                writer.Write(a.Type.Id);
-                writer.Write(" ");
-                writer.Write(a.Info.ToString());
-                writer.WriteLine();
+                try
+                {
+                    m_activityList.ForEach((a) =>
+                    {
+                        text.Write(a.Timestamp - previous);
+                        text.Write(" ");
+                        text.Write(a.Type.Id);
+                        text.Write(" ");
+                        text.Write(a.Info.ToString());
+                        text.WriteLine();
 
-                m_previous = a.Timestamp;
-            });
+                        previous = a.Timestamp;
+                    });
+                }
+                catch (IOException e)
+                {
+                    return false;
+                }
+
+                writer.Write(text.ToString());
+                m_previous = previous;
+                return true;
+            }
         }
 
         Timer m_dumpTimer;
