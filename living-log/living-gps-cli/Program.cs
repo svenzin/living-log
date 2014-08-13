@@ -7,54 +7,63 @@ using System.Threading.Tasks;
 
 namespace living_gps_cli
 {
+    public delegate string Command();
+    public static class Commands
+    {
+        public static Command Empty = () => string.Empty;
+        public static Command Unknown = () => "Unknown command";
+
+        public static Command Concatenate(Command first, Command second)
+        {
+            return () => first() + Environment.NewLine + second();
+        }
+    }
+
     interface ICommandMatcher
     {
-        bool IsMatch(string command);
-        Func<string> GetCommand(string command);
+        bool IsMatch(string commandName);
+        Command GetCommand(string arguments);
     }
-    class CommandEmpty : ICommandMatcher
+    class CommandMatcherSimple : ICommandMatcher
     {
-        public static Func<string> EmptyCommand = () => { return string.Empty; };
-        public bool IsMatch(string command) { return command.Equals(string.Empty); }
-        public Func<string> GetCommand(string command) { return EmptyCommand; }
+        public string Name { get; private set; }
+        private Command m_Command;
+
+        public CommandMatcherSimple(string name, Command command) { Name = name; m_Command = command; }
+        public bool IsMatch(string commandName) { return commandName.Equals(Name); }
+        public Command GetCommand(string arguments) { return m_Command; }
     }
+
     class CommandGarmin : ICommandMatcher
     {
-        class CommandHelp : ICommandMatcher
-        {
-            public bool IsMatch(string command) { return command.Equals("help"); }
-            public Func<string> GetCommand(string command) { return () => { return "Garmin commands : version" + Environment.NewLine; }; }
-        }
-        class CommandVersion : ICommandMatcher
-        {
-            public bool IsMatch(string command) { return command.Equals("version"); }
-            public Func<string> GetCommand(string command) { return () => { return "Version 0.1" + Environment.NewLine; }; }
-        }
+        public string Name { get; private set; }
 
-        private List<ICommandMatcher> CommandList;
+        private List<ICommandMatcher> GarminCommands;
         public CommandGarmin()
         {
-            CommandList = new List<ICommandMatcher>();
-            CommandList.Add(new CommandHelp());
-            CommandList.Add(new CommandVersion());
-        }
-        public bool IsMatch(string command)
-        {
-            return command.StartsWith("garmin ");
+            Name = "garmin";
+
+            GarminCommands = new List<ICommandMatcher>();
+            GarminCommands.Add(new CommandMatcherSimple("help", () => "Garmin commands: help, version"));
+            GarminCommands.Add(new CommandMatcherSimple("version", () => "Garmin utility v0.1"));
         }
 
-        public Func<string> GetCommand(string command)
+        public bool IsMatch(string commandName) { return commandName.Equals("garmin"); }
+
+        public Command GetCommand(string arguments)
         {
-            string garminCommand = command.Substring("garmin ".Length);
-            ICommandMatcher match = CommandList.Find((matcher) => { return matcher.IsMatch(garminCommand); });
-            if (match != null)
+            if (!string.IsNullOrEmpty(arguments))
             {
-                return match.GetCommand(garminCommand);
+                string newName = arguments.Split(' ').First();
+                string newArgs = arguments.Substring(newName.Length).Trim();
+                ICommandMatcher match = GarminCommands.Find(m => m.IsMatch(newName));
+                if (match != null) return match.GetCommand(newArgs);
+                return Commands.Concatenate(
+                    Commands.Unknown,
+                    GarminCommands.Find(m => m.IsMatch("help")).GetCommand(string.Empty)
+                    );
             }
-            else
-            {
-                return CommandEmpty.EmptyCommand;
-            }
+            return Commands.Empty;
         }
     }
 
@@ -91,20 +100,14 @@ namespace living_gps_cli
         private TextReader Input;
         private TextWriter Output;
         private bool IsRunning;
+        private List<ICommandMatcher> CommandList;
 
         class CommandExit : ICommandMatcher
         {
             private Program Repl;
             public CommandExit(Program repl) { Repl = repl; }
-            public bool IsMatch(string command)
-            {
-                return command.Equals("exit");
-            }
-
-            public Func<string> GetCommand(string command)
-            {
-                return () => { Repl.IsRunning = false; return "Exiting..." + Environment.NewLine; };
-            }
+            public bool IsMatch(string commandName) { return commandName.Equals("exit"); }
+            public Command GetCommand(string arguments) { return () => { Repl.IsRunning = false; return "Exiting..."; }; }
         }
 
         Program(TextReader input, TextWriter output)
@@ -118,27 +121,30 @@ namespace living_gps_cli
             CommandList.Add(new CommandGarmin());
         }
 
-        private List<ICommandMatcher> CommandList;
-        Func<string> Read()
+        Command Read()
         {
-            string line = Input.ReadLine().Trim();
-            ICommandMatcher command = CommandList.Find((item) => { return item.IsMatch(line); });
-            if (command != null)
+            string commandLine = Input.ReadLine().Trim();
+            if (!string.IsNullOrEmpty(commandLine))
             {
-                return command.GetCommand(line);
+                string commandName = commandLine.Split(' ').First();
+                string arguments = commandLine.Substring(commandName.Length).Trim();
+
+                ICommandMatcher match = CommandList.Find(m => m.IsMatch(commandName));
+                if (match != null)
+                {
+                    return match.GetCommand(arguments);
+                }
+                return Commands.Unknown;
             }
-            else
-            {
-                return CommandEmpty.EmptyCommand;
-            }
+            return Commands.Empty;
         }
         
         void REPL()
         {
             while (IsRunning)
             {
-                Func<string> evaluate = Read();
-                Output.Write(evaluate());
+                Command eval = Read();
+                Output.Write(eval() + Environment.NewLine);
             }
         }
     }
