@@ -27,13 +27,13 @@ namespace living_log_cli
 
         protected override void Enable()
         {
-            m_sync.Enabled = this.Enabled;
+            m_sync.Enabled = true;
             Invoke(Categories.LivingLog_Startup, new SyncData() { Timestamp = DateTime.UtcNow, Version = "1" });
         }
         
         protected override void Disable()
         {
-            m_sync.Enabled = this.Enabled;
+            m_sync.Enabled = false;
             Invoke(Categories.LivingLog_Exit, new SyncData() { Timestamp = DateTime.UtcNow, Version = "1" });
         }
 

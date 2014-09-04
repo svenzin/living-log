@@ -10,7 +10,7 @@ namespace living_log_cli
     {
         public static long TicksPerMs = TimeSpan.TicksPerMillisecond;
 
-        public static int DumpDelayInMs = 60 * 1000; // 1 minute
+        public static int DumpDelayInMs = 1000;//60 * 1000; // 1 minute
 
         public static int SyncDelayInMs = 60 * 60 * 1000; // 1 hour
         public static string SyncFormat = "yyyy-MM-dd_HH:mm:ss.fff";

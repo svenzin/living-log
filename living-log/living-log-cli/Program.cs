@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Drawing;
 using System.IO;
+using System.Threading;
 
 namespace living_log_cli
 {
@@ -106,7 +107,43 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 p.ForceExit();
                 return true;
             });
+
+            //var messagePump = new Thread(() => { p.REPL(Console.In, Console.Out); }) { IsBackground = true };
+            //messagePump.Start();
+            new Thread(() => { p.REPL(Console.In, Console.Out); }) { IsBackground = true }.Start();
+            //p.Enabled = false;
+            //p.Enabled = true;
             System.Windows.Forms.Application.Run();
+        }
+
+        private TextReader Input;
+        private TextWriter Output;
+        void REPL(TextReader input, TextWriter output)
+        {
+            Input = input;
+            Output = output;
+
+            string command = string.Empty;
+            do
+            {
+                command = Input.ReadLine().Trim();
+                if (command.Equals("pause"))
+                {
+                    if (Enabled)
+                    {
+                        Enabled = false;
+                        Output.WriteLine("Paused");
+                    }
+                }
+                else if (command.Equals("resume"))
+                {
+                    if (!Enabled)
+                    {
+                        Enabled = true;
+                        Output.WriteLine("Resumed");
+                    }
+                }
+            } while (!command.Equals("exit"));
         }
 
         Program(string filename)
@@ -117,30 +154,40 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
             m_living = new LivingLogger(Constants.SyncDelayInMs);
             m_living.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
-            m_living.Enabled = true;
 
             m_mouse = new MouseLogger();
             m_mouse.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
-            m_mouse.Enabled = true;
 
             m_keyboard = new KeyboardLogger();
             m_keyboard.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
-            m_keyboard.Enabled = true;
 
-            m_dumpTimer = new Timer();
+            m_dumpTimer = new System.Windows.Forms.Timer();
             m_dumpTimer.Interval = Constants.DumpDelayInMs;
             m_dumpTimer.Tick += (s, e) => { Dump(); };
-            m_dumpTimer.Enabled = true;
 
             m_filename = filename;
+
+            Enabled = true;
+        }
+
+        bool Enabled
+        {
+            get
+            {
+                return m_living.Enabled;
+            }
+            set
+            {
+                m_dumpTimer.Enabled = value;
+                m_living.Enabled = value;
+                m_mouse.Enabled = value;
+                m_keyboard.Enabled = value;
+            }
         }
 
         private void ForceExit()
         {
-            m_dumpTimer.Enabled = false;
-            m_keyboard.Enabled = false;
-            m_mouse.Enabled = false;
-            m_living.Enabled = false;
+            Enabled = false;
             Dump();
         }
 
@@ -198,7 +245,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
             }
         }
 
-        Timer m_dumpTimer;
+        System.Windows.Forms.Timer m_dumpTimer;
         string m_filename;
 
         MouseLogger m_mouse;
