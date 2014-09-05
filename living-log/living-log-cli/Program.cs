@@ -104,16 +104,22 @@ Options: -log LOG     Uses the file LOG as log for the activity
             Program p = new Program(Constants.LogFilename);
             SetExitHandler((t) =>
             {
-                p.ForceExit();
+                ForceExit();
                 return true;
             });
 
-            //var messagePump = new Thread(() => { p.REPL(Console.In, Console.Out); }) { IsBackground = true };
-            //messagePump.Start();
             new Thread(() => { p.REPL(Console.In, Console.Out); }) { IsBackground = true }.Start();
-            //p.Enabled = false;
-            //p.Enabled = true;
             System.Windows.Forms.Application.Run();
+
+            //new Thread(() => { System.Windows.Forms.Application.Run(); }) { IsBackground = true }.Start();
+            //p.REPL(Console.In, Console.Out);
+
+            p.Enabled = false;
+            p.Dump();
+        }
+        static void ForceExit()
+        {
+            System.Windows.Forms.Application.Exit();
         }
 
         private TextReader Input;
@@ -126,8 +132,8 @@ Options: -log LOG     Uses the file LOG as log for the activity
             string command = string.Empty;
             do
             {
-                command = Input.ReadLine().Trim();
-                if (command.Equals("pause"))
+                command = (Input.ReadLine() ?? "exit").Trim();
+                if (command.Equals("pause") || command.Equals("p"))
                 {
                     if (Enabled)
                     {
@@ -135,7 +141,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                         Output.WriteLine("Paused");
                     }
                 }
-                else if (command.Equals("resume"))
+                else if (command.Equals("resume") || command.Equals("r"))
                 {
                     if (!Enabled)
                     {
@@ -144,10 +150,14 @@ Options: -log LOG     Uses the file LOG as log for the activity
                     }
                 }
             } while (!command.Equals("exit"));
-        }
 
+            Program.ForceExit();
+        }
+        
         Program(string filename)
         {
+            m_filename = filename;
+
             m_activityList = new List<Activity>();
 
             m_previous = new Timestamp(DateTime.UtcNow);
@@ -161,11 +171,12 @@ Options: -log LOG     Uses the file LOG as log for the activity
             m_keyboard = new KeyboardLogger();
             m_keyboard.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
 
-            m_dumpTimer = new System.Windows.Forms.Timer();
-            m_dumpTimer.Interval = Constants.DumpDelayInMs;
-            m_dumpTimer.Tick += (s, e) => { Dump(); };
-
-            m_filename = filename;
+            m_dumpTimer = new System.Timers.Timer()
+            {
+                Interval = Constants.DumpDelayInMs,
+                AutoReset = true,
+            };
+            m_dumpTimer.Elapsed += (s, e) => Dump();
 
             Enabled = true;
         }
@@ -174,7 +185,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
         {
             get
             {
-                return m_living.Enabled;
+                return m_dumpTimer.Enabled;
             }
             set
             {
@@ -183,12 +194,6 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 m_mouse.Enabled = value;
                 m_keyboard.Enabled = value;
             }
-        }
-
-        private void ForceExit()
-        {
-            Enabled = false;
-            Dump();
         }
 
         private void Dump()
@@ -245,7 +250,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
             }
         }
 
-        System.Windows.Forms.Timer m_dumpTimer;
+        System.Timers.Timer m_dumpTimer;
         string m_filename;
 
         MouseLogger m_mouse;
