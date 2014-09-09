@@ -7,19 +7,14 @@ using System.Threading.Tasks;
 
 namespace living_gps_cli
 {
-    public delegate string Command();
+    public delegate string Command(Workspace workspace);
     public static class Commands
     {
-        public static Command Empty = () => string.Empty;
-        public static Command Unknown = () => "Unknown command";
-
-        public static Command Concatenate(Command first, Command second)
-        {
-            return () => first() + Environment.NewLine + second();
-        }
+        public static Command Empty = (_) => string.Empty;
+        public static Command Unknown = (_) => "Unknown command";
     }
 
-    interface ICommandMatcher
+    public interface ICommandMatcher
     {
         bool IsMatch(string commandName);
         Command GetCommand(string arguments);
@@ -34,96 +29,101 @@ namespace living_gps_cli
         public Command GetCommand(string arguments) { return m_Command; }
     }
 
-    class CommandGarmin : ICommandMatcher
+    class CommandGarmin : REPL, ICommandMatcher
     {
-        public string Name { get; private set; }
-
-        private List<ICommandMatcher> GarminCommands;
-        public CommandGarmin()
+        public CommandGarmin(TextReader input, TextWriter output)
+            : base(input, output)
         {
             Name = "garmin";
 
-            GarminCommands = new List<ICommandMatcher>();
-            GarminCommands.Add(new CommandMatcherSimple("help", () => "Garmin commands: help, version"));
-            GarminCommands.Add(new CommandMatcherSimple("version", () => "Garmin utility v0.1"));
+            AddCommand(new CommandMatcherSimple("help", (_) => "Garmin commands: help, version"));
+            AddCommand(new CommandMatcherSimple("version", (_) => "Garmin utility v0.1"));
         }
 
-        public bool IsMatch(string commandName) { return commandName.Equals("garmin"); }
+        public bool IsMatch(string commandName) { return commandName.Equals(Name); }
 
         public Command GetCommand(string arguments)
         {
-            if (!string.IsNullOrEmpty(arguments))
+            if (string.IsNullOrEmpty(arguments))
             {
-                string newName = arguments.Split(' ').First();
-                string newArgs = arguments.Substring(newName.Length).Trim();
-                ICommandMatcher match = GarminCommands.Find(m => m.IsMatch(newName));
-                if (match != null) return match.GetCommand(newArgs);
-                return Commands.Concatenate(
-                    Commands.Unknown,
-                    GarminCommands.Find(m => m.IsMatch("help")).GetCommand(string.Empty)
-                    );
+                return (workspace) =>
+                {
+                    Run(workspace);
+                    return string.Empty;
+                };
             }
-            return Commands.Empty;
+            else
+            {
+                return Parse(arguments);
+            }
         }
     }
 
-    class Program
+    public class Configuration
     {
-        #region Command line arguments
-        
-        static void Help()
+        #region Property management
+        private ConfigFile m_configFile;
+        private string GetProperty(string section, string name, string defaultValue)
         {
-
+            if (m_configFile != null && m_configFile.Exists(section, name))
+            {
+                return m_configFile.Get(section, name);
+            }
+            else
+            {
+                return defaultValue;
+            }
         }
-
-        static bool TryProcessingArguments(string[] args)
+        private void SetProperty(string section, string name, string value)
         {
-            return true;
+            if (m_configFile == null)
+            {
+                m_configFile = new living_gps_cli.ConfigFile();
+            }
+            m_configFile.Set(section, name, value);
         }
-        
         #endregion
 
-        static void Main(string[] args)
+        public void Load(string filename) { m_configFile = new ConfigFile(filename); }
+        public void Save(string filename) { m_configFile.Write(filename); }
+
+        public string WorkspacePath
         {
-            if (!TryProcessingArguments(args))
-            {
-                Help();
-                return;
-            }
-
-            Console.WriteLine("Living-gps");
-
-            Program p = new Program(Console.In, Console.Out);
-            p.REPL();
+            get { return GetProperty("workspace", "path", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)); }
+            set { SetProperty("workspace", "path", value); }
         }
+    }
 
-        private TextReader Input;
-        private TextWriter Output;
-        private bool IsRunning;
-        private List<ICommandMatcher> CommandList;
+    public class Workspace
+    {
+        public Configuration Config { get; set; }
+    }
 
-        class CommandExit : ICommandMatcher
+    public class REPL
+    {
+        TextReader Input;
+        TextWriter Output;
+        bool IsRunning;
+        List<ICommandMatcher> CommandList;
+
+        public string Name;
+        public REPL(TextReader input, TextWriter output)
         {
-            private Program Repl;
-            public CommandExit(Program repl) { Repl = repl; }
-            public bool IsMatch(string commandName) { return commandName.Equals("exit"); }
-            public Command GetCommand(string arguments) { return () => { Repl.IsRunning = false; return "Exiting..."; }; }
-        }
-
-        Program(TextReader input, TextWriter output)
-        {
-            IsRunning = true;
             Input = input;
             Output = output;
 
             CommandList = new List<ICommandMatcher>();
-            CommandList.Add(new CommandExit(this));
-            CommandList.Add(new CommandGarmin());
-        }
+            CommandList.Add(new CommandMatcherSimple("exit", (_) =>
+            {
+                IsRunning = false;
+                return "exit: " + Name;
+            }));
 
-        Command Read()
+            IsRunning = true;
+        }
+        
+        public Command Parse(string commandLine)
         {
-            string commandLine = Input.ReadLine().Trim();
             if (!string.IsNullOrEmpty(commandLine))
             {
                 string commandName = commandLine.Split(' ').First();
@@ -138,14 +138,101 @@ namespace living_gps_cli
             }
             return Commands.Empty;
         }
-        
-        void REPL()
+
+        public void AddCommand(ICommandMatcher command)
+        {
+            CommandList.Add(command);
+        }
+
+        public Command Prompt;
+        public void Run(Workspace workspace)
         {
             while (IsRunning)
             {
-                Command eval = Read();
-                Output.Write(eval() + Environment.NewLine);
+                if (Prompt != null) Output.Write(Prompt(workspace));
+                string commandLine = Input.ReadLine().Trim();
+                Command eval = Parse(commandLine);
+                Output.Write(eval(workspace) + Environment.NewLine);
             }
+        }
+    }
+
+    class Program
+    {
+        #region Command line arguments
+        
+        static void Help()
+        {
+            Console.WriteLine(
+@"
+living-log-gps
+
+Utilities for GPS handling
+
+Command: living-log-gps [-log LOG]
+
+Options: -log LOG     Uses the file LOG as log for the activity
+                      Default is ""My Documents""\living-log.config
+"
+            );
+        }
+
+        static bool TryProcessingArguments(string[] args)
+        {
+            int index = 0;
+            while (index < args.Length)
+            {
+                if (index + 2 <= args.Length)
+                {
+                    switch (args[index])
+                    {
+                        case "-log":
+                            configFilename = args[index + 1];
+                            break;
+                        default:
+                            return false;
+                    }
+                    index += 2;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        #endregion
+        
+        static string configFilename = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\living-log.config";
+        static void Main(string[] args)
+        {
+            if (!TryProcessingArguments(args))
+            {
+                Help();
+                return;
+            }
+
+            Configuration cfg = new Configuration();
+            cfg.Load(configFilename);
+
+            Console.WriteLine("Living-gps @ " + cfg.WorkspacePath);
+            Program p = new Program(Console.In, Console.Out, cfg);
+            p.Run();
+        }
+
+        private REPL m_repl;
+        private Workspace m_workspace;
+        Program(TextReader input, TextWriter output, Configuration cfg)
+        {
+            m_workspace = new Workspace() { Config = cfg };
+
+            m_repl = new REPL(input, output) { Name = "gps", Prompt = (_) => "gps>" };
+            m_repl.AddCommand(new CommandGarmin(input, output) { Prompt = (_) => "garmin>" });
+        }
+        void Run()
+        {
+            m_repl.Run(m_workspace);
         }
     }
 }

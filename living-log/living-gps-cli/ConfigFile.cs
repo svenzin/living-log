@@ -75,6 +75,9 @@ namespace living_gps_cli
             }
         }
 
+        public bool Exists(string name) { return Exists(string.Empty, name); }
+        public bool Exists(string section, string name) { return m_dictionary.ContainsKey(section.ToLower()) && m_dictionary[section].ContainsKey(name.ToLower()); }
+
         public string Get(string name) { return Get(string.Empty, name); }
         public string Get(string section, string name) { return m_dictionary[section.ToLower()][name.ToLower()]; }
 
