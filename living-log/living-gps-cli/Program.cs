@@ -59,6 +59,12 @@ namespace living_gps_cli
         }
     }
 
+    public class Property
+    {
+        public string Section;
+        public string Name;
+        public string DefaultValue;
+    }
     public class Configuration
     {
         #region Property management
@@ -82,20 +88,27 @@ namespace living_gps_cli
             }
             m_configFile.Set(section, name, value);
         }
+        private void ResetProperty(string section, string name)
+        {
+            if (m_configFile != null)
+            {
+                m_configFile.Reset(section, name);
+            }
+        }
         #endregion
 
+        public string Get(Property p) { return GetProperty(p.Section, p.Name, p.DefaultValue); }
+        public void Set(Property p, string value) { SetProperty(p.Section, p.Name, value); }
+        public void Reset(Property p) { ResetProperty(p.Section, p.Name); }
+        
         public void Load(string filename) { m_configFile = new ConfigFile(filename); }
         public void Save(string filename) { m_configFile.Write(filename); }
-
-        public string WorkspacePath
-        {
-            get { return GetProperty("workspace", "path", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)); }
-            set { SetProperty("workspace", "path", value); }
-        }
     }
 
     public class Workspace
     {
+        public static Property Path = new Property() { Section = "workspace", Name = "path", DefaultValue = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) };
+        
         public Configuration Config { get; set; }
     }
 
@@ -213,11 +226,11 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 return;
             }
 
-            Configuration cfg = new Configuration();
-            cfg.Load(configFilename);
+            Configuration config = new Configuration();
+            config.Load(configFilename);
 
-            Console.WriteLine("Living-gps @ " + cfg.WorkspacePath);
-            Program p = new Program(Console.In, Console.Out, cfg);
+            Console.WriteLine("Living-gps @ " + config.Get(Workspace.Path));
+            Program p = new Program(Console.In, Console.Out, config);
             p.Run();
         }
 

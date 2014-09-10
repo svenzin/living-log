@@ -65,12 +65,15 @@ namespace living_gps_cli
             {
                 foreach (var section in m_dictionary)
                 {
-                    writer.WriteLine("[" + section.Key + "]");
-                    foreach (var value in section.Value)
+                    if (section.Value != null && section.Value.Count > 0)
                     {
-                        writer.WriteLine(value.Key + " = " + value.Value);
+                        writer.WriteLine("[" + section.Key + "]");
+                        foreach (var value in section.Value)
+                        {
+                            writer.WriteLine(value.Key + " = " + value.Value);
+                        }
+                        writer.WriteLine();
                     }
-                    writer.WriteLine();
                 }
             }
         }
@@ -91,6 +94,15 @@ namespace living_gps_cli
             }
 
             m_dictionary[s][name.ToLower()] = value;
+        }
+
+        public void Reset(string name) { Reset(string.Empty, name); }
+        public void Reset(string section, string name)
+        {
+            if (Exists(section, name))
+            {
+                m_dictionary[section.ToLower()].Remove(name.ToLower());
+            }
         }
     }
 }
