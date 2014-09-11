@@ -23,6 +23,21 @@ namespace living_gps_cli
 
             AddCommand("help", (a, w) => "Garmin commands: help, version");
             AddCommand("version", (a, w) => "Garmin utility v0.1");
+            AddCommand("detect", (a, w) =>
+            {
+                StringBuilder result = new StringBuilder();
+                result.AppendLine("Garmin devices detected:");
+                int i = 0;
+                foreach (var drive in DriveInfo.GetDrives())
+                {
+                    if (File.Exists(drive.RootDirectory.FullName + "/Garmin/GarminDevice.xml"))
+                    {
+                        result.AppendLine("    [" + i + "] " + drive.Name);
+                        ++i;
+                    }
+                }
+                return result.ToString();
+            });
         }
     }
 
