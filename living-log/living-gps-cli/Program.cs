@@ -100,22 +100,16 @@ namespace living_gps_cli
             AddCommand("open", (a, w) =>
             {
                 int deviceIndex;
-                if (string.IsNullOrEmpty(a))
+                if (int.TryParse(a.Split(' ').First(), out deviceIndex))
                 {
-                    deviceIndex = 0;
-                }
-                else if (!int.TryParse(a.Split(' ').First(), out deviceIndex))
-                {
-                    deviceIndex = -1;
-                }
-
-                Device = Garmin.Open(deviceIndex);
-                if (Device != null)
-                {
-                    StringBuilder result = new StringBuilder();
-                    result.AppendLine("Using " + Device.Name + " - " + Device.Id + " (" + Device.Drive.Name + ")");
-                    result.AppendLine("    " + Device.ActivityDir + "/" + Device.ActivityFilter);
-                    return result.ToString();
+                    Device = Garmin.Open(deviceIndex);
+                    if (Device != null)
+                    {
+                        StringBuilder result = new StringBuilder();
+                        result.AppendLine("Using " + Device.Name + " - " + Device.Id + " (" + Device.Drive.Name + ")");
+                        result.AppendLine("    " + Device.ActivityDir + "/" + Device.ActivityFilter);
+                        return result.ToString();
+                    }
                 }
                 return Commands.Error;
             });
