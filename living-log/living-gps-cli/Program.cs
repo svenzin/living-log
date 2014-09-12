@@ -17,18 +17,16 @@ namespace living_gps_cli
         public static string Error = "Error";
     }
 
-    class CommandGarmin : REPL
+    public static class Garmin
     {
-        List<Device> Devices;
-        Device CurrentDevice;
-
-        class Device
+        public class Device
         {
-            public DriveInfo Drive;
-            public string Name;
-            public string Id;
-            public DirectoryInfo ActivityDir;
-            public string ActivityFilter;
+            public readonly DriveInfo Drive;
+            public readonly string Name;
+            public readonly string Id;
+            public readonly DirectoryInfo ActivityDir;
+            public readonly string ActivityFilter;
+
             public Device(DriveInfo drive)
             {
                 Drive = drive;
@@ -48,9 +46,37 @@ namespace living_gps_cli
                     ActivityDir = new DirectoryInfo(Drive.RootDirectory + activity.Element(ns + "Path").Value);
                     ActivityFilter = "*." + activity.Element(ns + "FileExtension").Value;
                 }
-                catch (Exception e) {}
+                catch (Exception e) { }
             }
         }
+
+        public static List<Device> DetectDevices()
+        {
+            return DriveInfo.GetDrives()
+                .Where((drive) => File.Exists(drive.RootDirectory.FullName + "/Garmin/GarminDevice.xml"))
+                .Select(d => new Device(d))
+                .ToList();
+        }
+
+        public static Device Open(int deviceIndex)
+        {
+            var devices = DetectDevices();
+            if (0 <= deviceIndex && deviceIndex < devices.Count)
+            {
+                return devices[deviceIndex];
+            }
+            return null;
+        }
+
+        public static IEnumerable<FileInfo> List(Device d)
+        {
+            return d.ActivityDir.EnumerateFiles(d.ActivityFilter);
+        }
+    }
+    
+    class CommandGarmin : REPL
+    {
+        Garmin.Device Device;
 
         public CommandGarmin(TextReader input, TextWriter output)
             : base(input, output)
@@ -61,51 +87,51 @@ namespace living_gps_cli
             AddCommand("version", (a, w) => "Garmin utility v0.1");
             AddCommand("detect", (a, w) =>
             {
-                DetectDevices();
+                List<Garmin.Device> devices = Garmin.DetectDevices();
 
                 StringBuilder result = new StringBuilder();
                 result.AppendLine("Garmin devices detected:");
-                for (int i = 0; i < Devices.Count; ++i)
+                for (int i = 0; i < devices.Count; ++i)
                 {
-                    result.AppendLine("    [" + i + "] " + Devices[i].Name + " - " + Devices[i].Id + " (" + Devices[i].Drive.Name + ")");
+                    result.AppendLine("    [" + i + "] " + devices[i].Name + " - " + devices[i].Id + " (" + devices[i].Drive.Name + ")");
                 }
                 return result.ToString();
             });
-            AddCommand("use", (a, w) =>
+            AddCommand("open", (a, w) =>
             {
                 int deviceIndex;
-                if (string.IsNullOrEmpty(a)) a = "0";
-                if (int.TryParse(a.Split(' ').First(), out deviceIndex))
+                if (string.IsNullOrEmpty(a))
                 {
-                    if (Devices == null) DetectDevices();
-                    if (0 <= deviceIndex && deviceIndex < Devices.Count)
-                    {
-                        CurrentDevice = Devices[deviceIndex];
-                        StringBuilder result = new StringBuilder();
-                        result.AppendLine("Using " + CurrentDevice.Name + " - " + CurrentDevice.Id + " (" + CurrentDevice.Drive.Name + ")");
-                        result.AppendLine("    " + CurrentDevice.ActivityDir + "/" + CurrentDevice.ActivityFilter);
-                        return result.ToString();
-                    }
+                    deviceIndex = 0;
+                }
+                else if (!int.TryParse(a.Split(' ').First(), out deviceIndex))
+                {
+                    deviceIndex = -1;
+                }
+
+                Device = Garmin.Open(deviceIndex);
+                if (Device != null)
+                {
+                    StringBuilder result = new StringBuilder();
+                    result.AppendLine("Using " + Device.Name + " - " + Device.Id + " (" + Device.Drive.Name + ")");
+                    result.AppendLine("    " + Device.ActivityDir + "/" + Device.ActivityFilter);
+                    return result.ToString();
                 }
                 return Commands.Error;
             });
             AddCommand("list", (a, w) =>
             {
                 StringBuilder result = new StringBuilder();
-                result.AppendLine(CurrentDevice.Name + " - " + CurrentDevice.Id);
-                result.AppendLine(CurrentDevice.ActivityDir.FullName);
-                foreach (var f in CurrentDevice.ActivityDir.EnumerateFiles(CurrentDevice.ActivityFilter)) result.AppendLine("    " + f.Name);
+                result.AppendLine(Device.Name + " - " + Device.Id);
+                result.AppendLine(Device.ActivityDir.FullName);
+                foreach (var f in Garmin.List(Device))
+                {
+                    result.AppendLine("    " + f.Name);
+                }
                 return result.ToString();
             });
         }
 
-        void DetectDevices()
-        {
-            Devices = DriveInfo.GetDrives()
-                .Where((drive) => File.Exists(drive.RootDirectory.FullName + "/Garmin/GarminDevice.xml"))
-                .Select(d => new Device(d))
-                .ToList();
-        }
     }
 
     public class Property
