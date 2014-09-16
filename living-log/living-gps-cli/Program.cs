@@ -17,63 +17,6 @@ namespace living_gps_cli
         public static string Error = "Error";
     }
 
-    public static class Garmin
-    {
-        public class Device
-        {
-            public readonly DriveInfo Drive;
-            public readonly string Name;
-            public readonly string Id;
-            public readonly DirectoryInfo ActivityDir;
-            public readonly string ActivityFilter;
-
-            public Device(DriveInfo drive)
-            {
-                Drive = drive;
-
-                try
-                {
-                    XDocument doc = XDocument.Load(drive.RootDirectory.FullName + "/Garmin/GarminDevice.xml");
-                    var ns = doc.Root.Name.Namespace;
-                    Name = doc.Root.Element(ns + "Model").Element(ns + "Description").Value;
-                    Id = doc.Root.Element(ns + "Id").Value;
-                    var activity = doc.Root
-                        .Descendants(ns + "DataType")
-                        .Where(e => e.Element(ns + "Name").Value == "FIT_TYPE_4")
-                        .Descendants(ns + "File")
-                        .Where(e => e.Element(ns + "TransferDirection").Value == "OutputFromUnit")
-                        .First().Element(ns + "Location");
-                    ActivityDir = new DirectoryInfo(Drive.RootDirectory + activity.Element(ns + "Path").Value);
-                    ActivityFilter = "*." + activity.Element(ns + "FileExtension").Value;
-                }
-                catch (Exception e) { }
-            }
-        }
-
-        public static List<Device> DetectDevices()
-        {
-            return DriveInfo.GetDrives()
-                .Where((drive) => File.Exists(drive.RootDirectory.FullName + "/Garmin/GarminDevice.xml"))
-                .Select(d => new Device(d))
-                .ToList();
-        }
-
-        public static Device Open(int deviceIndex)
-        {
-            var devices = DetectDevices();
-            if (0 <= deviceIndex && deviceIndex < devices.Count)
-            {
-                return devices[deviceIndex];
-            }
-            return null;
-        }
-
-        public static IEnumerable<FileInfo> List(Device d)
-        {
-            return d.ActivityDir.EnumerateFiles(d.ActivityFilter);
-        }
-    }
-    
     class CommandGarmin : REPL
     {
         Garmin.Device Device;
@@ -126,52 +69,6 @@ namespace living_gps_cli
             });
         }
 
-    }
-
-    public class Property
-    {
-        public string Section;
-        public string Name;
-        public string DefaultValue;
-    }
-    public class Configuration
-    {
-        #region Property management
-        private ConfigFile m_configFile;
-        private string GetProperty(string section, string name, string defaultValue)
-        {
-            if (m_configFile != null && m_configFile.Exists(section, name))
-            {
-                return m_configFile.Get(section, name);
-            }
-            else
-            {
-                return defaultValue;
-            }
-        }
-        private void SetProperty(string section, string name, string value)
-        {
-            if (m_configFile == null)
-            {
-                m_configFile = new living_gps_cli.ConfigFile();
-            }
-            m_configFile.Set(section, name, value);
-        }
-        private void ResetProperty(string section, string name)
-        {
-            if (m_configFile != null)
-            {
-                m_configFile.Reset(section, name);
-            }
-        }
-        #endregion
-
-        public string Get(Property p) { return GetProperty(p.Section, p.Name, p.DefaultValue); }
-        public void Set(Property p, string value) { SetProperty(p.Section, p.Name, value); }
-        public void Reset(Property p) { ResetProperty(p.Section, p.Name); }
-
-        public void Load(string filename) { m_configFile = new ConfigFile(filename); }
-        public void Save(string filename) { m_configFile.Write(filename); }
     }
 
     public class Workspace
