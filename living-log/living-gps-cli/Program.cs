@@ -61,11 +61,50 @@ namespace living_gps_cli
                 StringBuilder result = new StringBuilder();
                 result.AppendLine(Device.Name + " - " + Device.Id);
                 result.AppendLine(Device.ActivityDir.FullName);
-                foreach (var f in Garmin.List(Device))
+                var files = Garmin.List(Device).ToList();
+                for (int i = 0; i < files.Count; ++i)
                 {
-                    result.AppendLine("    " + f.Name);
+                    result.AppendLine("    [" + i + "] " + files[i].Name);
                 }
                 return result.ToString();
+            });
+            AddCommand("load", (a, w) =>
+            {
+                int index;
+                if (int.TryParse(a.Split(' ').First(), out index))
+                {
+                    var file = Garmin.List(Device).ElementAtOrDefault(index);
+                    if (file != null && file.Exists)
+                    {
+                        var fitFile = file.OpenRead();
+                        var reader = new Dynastream.Fit.Decode();
+                        if (reader.IsFIT(fitFile) && reader.CheckIntegrity(fitFile))
+                        {
+                            var trigger = new Dynastream.Fit.MesgBroadcaster();
+                            reader.MesgEvent += trigger.OnMesg;
+                            reader.MesgDefinitionEvent += trigger.OnMesgDefinition;
+
+                            trigger.MesgEvent += (s, e) =>
+                            {
+                                Console.WriteLine("OnMesg: Received Mesg with global ID#{0}, its name is {1}", e.mesg.Num, e.mesg.Name);
+                                for (byte i = 0; i < e.mesg.GetNumFields(); i++)
+                                    for (int j = 0; j < e.mesg.fields[i].GetNumValues(); j++)
+                                        Console.WriteLine("\tField{0} Index{1} (\"{2}\" Field#{4}) Value: {3} (raw value {5})", i, j, e.mesg.fields[i].GetName(), e.mesg.fields[i].GetValue(j), e.mesg.fields[i].Num, e.mesg.fields[i].GetRawValue(j));
+                            };
+                            trigger.MesgDefinitionEvent += (s, e) =>
+                            {
+                                Console.WriteLine("OnMesgDef: Received Defn for local message #{0}, global num {1}", e.mesgDef.LocalMesgNum, e.mesgDef.GlobalMesgNum);
+                                Console.WriteLine("\tIt has {0} fields and is {1} bytes long", e.mesgDef.NumFields, e.mesgDef.GetMesgSize());
+                            };
+
+                            reader.Read(fitFile);
+                            fitFile.Close();
+                        }
+                        StringBuilder result = new StringBuilder();
+                        return result.ToString();
+                    }
+                }
+                return Commands.Error;
             });
         }
 
