@@ -87,9 +87,9 @@ namespace living_gps_cli
                             trigger.MesgEvent += (s, e) =>
                             {
                                 Console.WriteLine("OnMesg: Received Mesg with global ID#{0}, its name is {1}", e.mesg.Num, e.mesg.Name);
-                                for (byte i = 0; i < e.mesg.GetNumFields(); i++)
-                                    for (int j = 0; j < e.mesg.fields[i].GetNumValues(); j++)
-                                        Console.WriteLine("\tField{0} Index{1} (\"{2}\" Field#{4}) Value: {3} (raw value {5})", i, j, e.mesg.fields[i].GetName(), e.mesg.fields[i].GetValue(j), e.mesg.fields[i].Num, e.mesg.fields[i].GetRawValue(j));
+                                //for (byte i = 0; i < e.mesg.GetNumFields(); i++)
+                                //    for (int j = 0; j < e.mesg.fields[i].GetNumValues(); j++)
+                                //        Console.WriteLine("\tField{0} Index{1} (\"{2}\" Field#{4}) Value: {3} (raw value {5})", i, j, e.mesg.fields[i].GetName(), e.mesg.fields[i].GetValue(j), e.mesg.fields[i].Num, e.mesg.fields[i].GetRawValue(j));
                             };
                             trigger.MesgDefinitionEvent += (s, e) =>
                             {
