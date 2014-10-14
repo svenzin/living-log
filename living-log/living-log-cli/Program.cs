@@ -151,12 +151,9 @@ Options: -log LOG     Uses the file LOG as log for the activity
             {
                 try
                 {
-                    using (var writer = new StreamWriter(new FileStream(m_filename, FileMode.Append)))
+                    if (WriteBinary(File.Open(m_filename, FileMode.Append)))
                     {
-                        if (WriteText(writer))
-                        {
-                            m_activityList.Clear();
-                        }
+                        m_activityList.Clear();
                     }
                 }
                 catch (IOException e)
@@ -168,33 +165,205 @@ Options: -log LOG     Uses the file LOG as log for the activity
         }
 
         private Timestamp m_previous;
-        private bool WriteText(TextWriter writer)
+        private bool WriteText(Stream output)
         {
-            Timestamp previous = m_previous;
-            using (var text = new StringWriter())
+            using (var writer = new StreamWriter(output))
             {
-                try
+                using (var text = new StringWriter())
                 {
-                    m_activityList.ForEach((a) =>
+                    Timestamp previous = m_previous;
+
+                    try
                     {
-                        text.Write(a.Timestamp - previous);
-                        text.Write(" ");
-                        text.Write(a.Type.Id);
-                        text.Write(" ");
-                        text.Write(a.Info.ToString());
-                        text.WriteLine();
+                        m_activityList.ForEach((a) =>
+                        {
+                            text.Write(a.Timestamp - previous);
+                            text.Write(" ");
+                            text.Write(a.Type.Id);
+                            text.Write(" ");
+                            text.Write(a.Info.ToString());
+                            text.WriteLine();
 
-                        previous = a.Timestamp;
-                    });
+                            previous = a.Timestamp;
+                        });
+                    }
+                    catch (IOException e)
+                    {
+                        return false;
+                    }
+
+                    writer.Write(text.ToString());
+                    m_previous = previous;
+                    return true;
                 }
-                catch (IOException e)
+            }
+        }
+
+        public static class Binary
+        {
+            public static long FloodLeft(long value)
+            {
+                var r = value;
+                r |= (r << 1);
+                r |= (r << 2);
+                r |= (r << 4);
+                r |= (r << 8);
+                r |= (r << 16);
+                r |= (r << 32);
+                return r;
+            }
+
+            public static long FloodRight(long value)
+            {
+                var r = value;
+                r |= (r >> 1);
+                r |= (r >> 2);
+                r |= (r >> 4);
+                r |= (r >> 8);
+                r |= (r >> 16);
+                r |= (r >> 32);
+                return r;
+            }
+        }
+        
+        public static class BinaryEncoding
+        {
+            public static byte[] Encode(long value)
+            {
+                long limit_1b = (1L << 6);
+                long limit_2b = (1L << 13);
+                long limit_3b = (1L << 28);
+                long limit_4b = (1L << 59);
+
+                if (-limit_1b <= value && value < limit_1b)
                 {
-                    return false;
+                    return new byte[] { 
+                        (byte)(value & 0x7F),
+                    };
                 }
+                else if (-limit_2b <= value && value < limit_2b)
+                {
+                    return new byte[] {
+                        (byte)(((value >> 8) & 0x3F) | 0x80),
+                        (byte) ((value >> 0) & 0xFF),
+                    };
+                }
+                else if (-limit_3b <= value && value < limit_3b)
+                {
+                    return new byte[] {
+                        (byte)(((value >> 24) & 0x1F) | 0xC0),
+                        (byte) ((value >> 16) & 0xFF),
+                        (byte) ((value >>  8) & 0xFF),
+                        (byte) ((value >>  0) & 0xFF),
+                    };
+                }
+                else if (-limit_4b <= value && value < limit_4b)
+                {
+                    return new byte[] {
+                        (byte)(((value >> 56) & 0x0F) | 0xE0),
+                        (byte) ((value >> 48) & 0xFF),
+                        (byte) ((value >> 40) & 0xFF),
+                        (byte) ((value >> 32) & 0xFF),
+                        (byte) ((value >> 24) & 0xFF),
+                        (byte) ((value >> 16) & 0xFF),
+                        (byte) ((value >>  8) & 0xFF),
+                        (byte) ((value >>  0) & 0xFF),
+                    };
+                }
+                else
+                {
+                    return new byte[] {
+                        (byte) (0xFF),
+                        (byte) ((value >> 56) & 0xFF),
+                        (byte) ((value >> 48) & 0xFF),
+                        (byte) ((value >> 40) & 0xFF),
+                        (byte) ((value >> 32) & 0xFF),
+                        (byte) ((value >> 24) & 0xFF),
+                        (byte) ((value >> 16) & 0xFF),
+                        (byte) ((value >>  8) & 0xFF),
+                        (byte) ((value >>  0) & 0xFF),
+                    };
+                }
+            }
 
-                writer.Write(text.ToString());
-                m_previous = previous;
-                return true;
+            public static long Decode(BinaryReader reader)
+            {
+
+                byte head = reader.ReadByte();
+                if ((head & 0x80) == 0)
+                {
+                    long sign = Binary.FloodLeft(head & 0x40);
+                    return sign | (head & 0x7FL);
+                }
+                else if ((head & 0x40) == 0)
+                {
+                    long sign = Binary.FloodLeft(head & 0x20);
+                    return ((sign | (head & 0x3FL)) << 8)
+                        | ((long)reader.ReadByte());
+                }
+                else if ((head & 0x20) == 0)
+                {
+                    long sign = Binary.FloodLeft(head & 0x10);
+                    return ((sign | (head & 0x1FL)) << 24)
+                        | ((long)reader.ReadByte() << 16)
+                        | ((long)reader.ReadByte() << 8)
+                        | ((long)reader.ReadByte());
+                }
+                else if ((head & 0x10) == 0)
+                {
+                    long sign = Binary.FloodLeft(head & 0x08);
+                    return ((sign | (head & 0x0FL)) << 56)
+                        | ((long)reader.ReadByte() << 48)
+                        | ((long)reader.ReadByte() << 40)
+                        | ((long)reader.ReadByte() << 32)
+                        | ((long)reader.ReadByte() << 24)
+                        | ((long)reader.ReadByte() << 16)
+                        | ((long)reader.ReadByte() << 8)
+                        | ((long)reader.ReadByte());
+                }
+                else
+                {
+                    return ((long)reader.ReadByte() << 56)
+                        | ((long)reader.ReadByte() << 48)
+                        | ((long)reader.ReadByte() << 40)
+                        | ((long)reader.ReadByte() << 32)
+                        | ((long)reader.ReadByte() << 24)
+                        | ((long)reader.ReadByte() << 16)
+                        | ((long)reader.ReadByte() << 8)
+                        | ((long)reader.ReadByte());
+                }
+            }
+        }
+        
+        private bool WriteBinary(Stream output)
+        {
+            using (var writer = new BinaryWriter(output))
+            {
+                var data = new MemoryStream();
+                using (var dataWriter = new BinaryWriter(data))
+                {
+                    Timestamp previous = m_previous;
+
+                    try
+                    {
+                        m_activityList.ForEach((a) =>
+                        {
+                            dataWriter.Write(BinaryEncoding.Encode((a.Timestamp - previous).Milliseconds));
+                            dataWriter.Write(BinaryEncoding.Encode(a.Type.Id));
+                            dataWriter.Write(a.Info.ToString());
+
+                            previous = a.Timestamp;
+                        });
+                    }
+                    catch (IOException e)
+                    {
+                        return false;
+                    }
+
+                    writer.Write(data.ToArray());
+                    m_previous = previous;
+                    return true;
+                }
             }
         }
 
