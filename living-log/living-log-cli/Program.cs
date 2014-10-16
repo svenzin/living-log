@@ -201,7 +201,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
         public static class Binary
         {
-            public static long FloodLeft(long value)
+            public static ulong FloodLeft(ulong value)
             {
                 var r = value;
                 r |= (r << 1);
@@ -213,7 +213,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 return r;
             }
 
-            public static long FloodRight(long value)
+            public static ulong FloodRight(ulong value)
             {
                 var r = value;
                 r |= (r >> 1);
@@ -228,27 +228,42 @@ Options: -log LOG     Uses the file LOG as log for the activity
         
         public static class BinaryEncoding
         {
-            public static byte[] Encode(long value)
+            public static ulong Convert(long value)
             {
-                long limit_1b = (1L << 6);
-                long limit_2b = (1L << 13);
-                long limit_3b = (1L << 28);
-                long limit_4b = (1L << 59);
+                return (ulong)(((ulong)value << 1) ^ Binary.FloodLeft((ulong)value >> 63));
+                //if (value >= 0) return (ulong)(value << 1);
+                //return (ulong)((~value << 1) | 1);
+            }
 
-                if (-limit_1b <= value && value < limit_1b)
+            public static long Convert(ulong value)
+            {
+                return (long)((value >> 1) ^ Binary.FloodLeft(value & 1));
+                //if ((value & 1) == 0) return (long)(value >> 1);
+                //return (long)((~value >> 1) | 0x8000000000000000UL);
+            }
+
+            public static byte[] Encode(long value) { return Encode(Convert(value)); }
+            public static byte[] Encode(ulong value)
+            {
+                ulong limit_1b = (1L << 7);
+                ulong limit_2b = (1L << 14);
+                ulong limit_3b = (1L << 29);
+                ulong limit_4b = (1L << 60);
+
+                if (value < limit_1b)
                 {
                     return new byte[] { 
                         (byte)(value & 0x7F),
                     };
                 }
-                else if (-limit_2b <= value && value < limit_2b)
+                else if (value < limit_2b)
                 {
                     return new byte[] {
                         (byte)(((value >> 8) & 0x3F) | 0x80),
                         (byte) ((value >> 0) & 0xFF),
                     };
                 }
-                else if (-limit_3b <= value && value < limit_3b)
+                else if (value < limit_3b)
                 {
                     return new byte[] {
                         (byte)(((value >> 24) & 0x1F) | 0xC0),
@@ -257,7 +272,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                         (byte) ((value >>  0) & 0xFF),
                     };
                 }
-                else if (-limit_4b <= value && value < limit_4b)
+                else if (value < limit_4b)
                 {
                     return new byte[] {
                         (byte)(((value >> 56) & 0x0F) | 0xE0),
@@ -286,51 +301,48 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 }
             }
 
-            public static long Decode(BinaryReader reader)
+            public static long DecodeL(BinaryReader reader) { return Convert(DecodeUL(reader)); }
+            public static ulong DecodeUL(BinaryReader reader)
             {
 
                 byte head = reader.ReadByte();
                 if ((head & 0x80) == 0)
                 {
-                    long sign = Binary.FloodLeft(head & 0x40);
-                    return sign | (head & 0x7FL);
+                    return head & 0x7FUL;
                 }
                 else if ((head & 0x40) == 0)
                 {
-                    long sign = Binary.FloodLeft(head & 0x20);
-                    return ((sign | (head & 0x3FL)) << 8)
-                        | ((long)reader.ReadByte());
+                    return ((head & 0x3FUL) << 8)
+                        | ((ulong)reader.ReadByte());
                 }
                 else if ((head & 0x20) == 0)
                 {
-                    long sign = Binary.FloodLeft(head & 0x10);
-                    return ((sign | (head & 0x1FL)) << 24)
-                        | ((long)reader.ReadByte() << 16)
-                        | ((long)reader.ReadByte() << 8)
-                        | ((long)reader.ReadByte());
+                    return ((head & 0x1FUL) << 24)
+                        | ((ulong)reader.ReadByte() << 16)
+                        | ((ulong)reader.ReadByte() << 8)
+                        | ((ulong)reader.ReadByte());
                 }
                 else if ((head & 0x10) == 0)
                 {
-                    long sign = Binary.FloodLeft(head & 0x08);
-                    return ((sign | (head & 0x0FL)) << 56)
-                        | ((long)reader.ReadByte() << 48)
-                        | ((long)reader.ReadByte() << 40)
-                        | ((long)reader.ReadByte() << 32)
-                        | ((long)reader.ReadByte() << 24)
-                        | ((long)reader.ReadByte() << 16)
-                        | ((long)reader.ReadByte() << 8)
-                        | ((long)reader.ReadByte());
+                    return ((head & 0x0FUL) << 56)
+                        | ((ulong)reader.ReadByte() << 48)
+                        | ((ulong)reader.ReadByte() << 40)
+                        | ((ulong)reader.ReadByte() << 32)
+                        | ((ulong)reader.ReadByte() << 24)
+                        | ((ulong)reader.ReadByte() << 16)
+                        | ((ulong)reader.ReadByte() << 8)
+                        | ((ulong)reader.ReadByte());
                 }
                 else
                 {
-                    return ((long)reader.ReadByte() << 56)
-                        | ((long)reader.ReadByte() << 48)
-                        | ((long)reader.ReadByte() << 40)
-                        | ((long)reader.ReadByte() << 32)
-                        | ((long)reader.ReadByte() << 24)
-                        | ((long)reader.ReadByte() << 16)
-                        | ((long)reader.ReadByte() << 8)
-                        | ((long)reader.ReadByte());
+                    return ((ulong)reader.ReadByte() << 56)
+                        | ((ulong)reader.ReadByte() << 48)
+                        | ((ulong)reader.ReadByte() << 40)
+                        | ((ulong)reader.ReadByte() << 32)
+                        | ((ulong)reader.ReadByte() << 24)
+                        | ((ulong)reader.ReadByte() << 16)
+                        | ((ulong)reader.ReadByte() << 8)
+                        | ((ulong)reader.ReadByte());
                 }
             }
         }
