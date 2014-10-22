@@ -199,51 +199,85 @@ Options: -log LOG     Uses the file LOG as log for the activity
             }
         }
 
-        public static class Binary
-        {
-            public static ulong FloodLeft(ulong value)
-            {
-                var r = value;
-                r |= (r << 1);
-                r |= (r << 2);
-                r |= (r << 4);
-                r |= (r << 8);
-                r |= (r << 16);
-                r |= (r << 32);
-                return r;
-            }
-
-            public static ulong FloodRight(ulong value)
-            {
-                var r = value;
-                r |= (r >> 1);
-                r |= (r >> 2);
-                r |= (r >> 4);
-                r |= (r >> 8);
-                r |= (r >> 16);
-                r |= (r >> 32);
-                return r;
-            }
-        }
-        
-        public static class BinaryEncoding
+        public static class Converter
         {
             public static ulong Convert(long value)
             {
-                return (ulong)(((ulong)value << 1) ^ Binary.FloodLeft((ulong)value >> 63));
-                //if (value >= 0) return (ulong)(value << 1);
-                //return (ulong)((~value << 1) | 1);
+                if (value >= 0) return (ulong)value << 1;
+                return ~((ulong)value) << 1;
             }
-
             public static long Convert(ulong value)
             {
-                return (long)((value >> 1) ^ Binary.FloodLeft(value & 1));
-                //if ((value & 1) == 0) return (long)(value >> 1);
-                //return (long)((~value >> 1) | 0x8000000000000000UL);
+                if ((value & 1) == 0) return (long)(value >> 1);
+                return (long)(~(value >> 1));
             }
+        }
 
-            public static byte[] Encode(long value) { return Encode(Convert(value)); }
-            public static byte[] Encode(ulong value)
+        public class EncodedReader : BinaryReader
+        {
+            public EncodedReader(Stream input) : base(input) { }
+            public EncodedReader(Stream input, Encoding encoding) : base(input, encoding) { }
+            public EncodedReader(Stream input, Encoding encoding, bool leaveOpen) : base(input, encoding, leaveOpen) { }
+
+            public virtual long ReadEncodedInt64()
+            {
+                return Converter.Convert(ReadEncodedUInt64());
+            }
+            public virtual ulong ReadEncodedUInt64()
+            {
+                byte head = ReadByte();
+                if ((head & 0x80) == 0)
+                {
+                    return head & 0x7FUL;
+                }
+                else if ((head & 0x40) == 0)
+                {
+                    return ((head & 0x3FUL) << 8)
+                        | ((ulong)ReadByte());
+                }
+                else if ((head & 0x20) == 0)
+                {
+                    return ((head & 0x1FUL) << 24)
+                        | ((ulong)ReadByte() << 16)
+                        | ((ulong)ReadByte() << 8)
+                        | ((ulong)ReadByte());
+                }
+                else if ((head & 0x10) == 0)
+                {
+                    return ((head & 0x0FUL) << 56)
+                        | ((ulong)ReadByte() << 48)
+                        | ((ulong)ReadByte() << 40)
+                        | ((ulong)ReadByte() << 32)
+                        | ((ulong)ReadByte() << 24)
+                        | ((ulong)ReadByte() << 16)
+                        | ((ulong)ReadByte() << 8)
+                        | ((ulong)ReadByte());
+                }
+                else
+                {
+                    return ((ulong)ReadByte() << 56)
+                        | ((ulong)ReadByte() << 48)
+                        | ((ulong)ReadByte() << 40)
+                        | ((ulong)ReadByte() << 32)
+                        | ((ulong)ReadByte() << 24)
+                        | ((ulong)ReadByte() << 16)
+                        | ((ulong)ReadByte() << 8)
+                        | ((ulong)ReadByte());
+                }
+            }
+        }
+        
+        public class EncodedWriter : BinaryWriter
+        {
+            public EncodedWriter(Stream output) : base(output) { }
+            public EncodedWriter(Stream output, Encoding encoding) : base(output, encoding) { }
+            public EncodedWriter(Stream output, Encoding encoding, bool leaveOpen) : base(output, encoding, leaveOpen) { }
+
+            public virtual void WriteEncoded(long value)
+            {
+                WriteEncoded(Converter.Convert(value));
+            }
+            public virtual void WriteEncoded(ulong value)
             {
                 ulong limit_1b = (1L << 7);
                 ulong limit_2b = (1L << 14);
@@ -252,107 +286,52 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
                 if (value < limit_1b)
                 {
-                    return new byte[] { 
-                        (byte)(value & 0x7F),
-                    };
+                    Write((byte)(value & 0x7F));
                 }
                 else if (value < limit_2b)
                 {
-                    return new byte[] {
-                        (byte)(((value >> 8) & 0x3F) | 0x80),
-                        (byte) ((value >> 0) & 0xFF),
-                    };
+                    Write((byte)(((value >> 8) & 0x3F) | 0x80));
+                    Write((byte)((value >> 0) & 0xFF));
                 }
                 else if (value < limit_3b)
                 {
-                    return new byte[] {
-                        (byte)(((value >> 24) & 0x1F) | 0xC0),
-                        (byte) ((value >> 16) & 0xFF),
-                        (byte) ((value >>  8) & 0xFF),
-                        (byte) ((value >>  0) & 0xFF),
-                    };
+                    Write((byte)(((value >> 24) & 0x1F) | 0xC0));
+                    Write((byte)((value >> 16) & 0xFF));
+                    Write((byte)((value >> 8) & 0xFF));
+                    Write((byte)((value >> 0) & 0xFF));
                 }
                 else if (value < limit_4b)
                 {
-                    return new byte[] {
-                        (byte)(((value >> 56) & 0x0F) | 0xE0),
-                        (byte) ((value >> 48) & 0xFF),
-                        (byte) ((value >> 40) & 0xFF),
-                        (byte) ((value >> 32) & 0xFF),
-                        (byte) ((value >> 24) & 0xFF),
-                        (byte) ((value >> 16) & 0xFF),
-                        (byte) ((value >>  8) & 0xFF),
-                        (byte) ((value >>  0) & 0xFF),
-                    };
+                    Write((byte)(((value >> 56) & 0x0F) | 0xE0));
+                    Write((byte)((value >> 48) & 0xFF));
+                    Write((byte)((value >> 40) & 0xFF));
+                    Write((byte)((value >> 32) & 0xFF));
+                    Write((byte)((value >> 24) & 0xFF));
+                    Write((byte)((value >> 16) & 0xFF));
+                    Write((byte)((value >> 8) & 0xFF));
+                    Write((byte)((value >> 0) & 0xFF));
                 }
                 else
                 {
-                    return new byte[] {
-                        (byte) (0xFF),
-                        (byte) ((value >> 56) & 0xFF),
-                        (byte) ((value >> 48) & 0xFF),
-                        (byte) ((value >> 40) & 0xFF),
-                        (byte) ((value >> 32) & 0xFF),
-                        (byte) ((value >> 24) & 0xFF),
-                        (byte) ((value >> 16) & 0xFF),
-                        (byte) ((value >>  8) & 0xFF),
-                        (byte) ((value >>  0) & 0xFF),
-                    };
-                }
-            }
-
-            public static long DecodeL(BinaryReader reader) { return Convert(DecodeUL(reader)); }
-            public static ulong DecodeUL(BinaryReader reader)
-            {
-
-                byte head = reader.ReadByte();
-                if ((head & 0x80) == 0)
-                {
-                    return head & 0x7FUL;
-                }
-                else if ((head & 0x40) == 0)
-                {
-                    return ((head & 0x3FUL) << 8)
-                        | ((ulong)reader.ReadByte());
-                }
-                else if ((head & 0x20) == 0)
-                {
-                    return ((head & 0x1FUL) << 24)
-                        | ((ulong)reader.ReadByte() << 16)
-                        | ((ulong)reader.ReadByte() << 8)
-                        | ((ulong)reader.ReadByte());
-                }
-                else if ((head & 0x10) == 0)
-                {
-                    return ((head & 0x0FUL) << 56)
-                        | ((ulong)reader.ReadByte() << 48)
-                        | ((ulong)reader.ReadByte() << 40)
-                        | ((ulong)reader.ReadByte() << 32)
-                        | ((ulong)reader.ReadByte() << 24)
-                        | ((ulong)reader.ReadByte() << 16)
-                        | ((ulong)reader.ReadByte() << 8)
-                        | ((ulong)reader.ReadByte());
-                }
-                else
-                {
-                    return ((ulong)reader.ReadByte() << 56)
-                        | ((ulong)reader.ReadByte() << 48)
-                        | ((ulong)reader.ReadByte() << 40)
-                        | ((ulong)reader.ReadByte() << 32)
-                        | ((ulong)reader.ReadByte() << 24)
-                        | ((ulong)reader.ReadByte() << 16)
-                        | ((ulong)reader.ReadByte() << 8)
-                        | ((ulong)reader.ReadByte());
+                    Write((byte)(0xFF));
+                    Write((byte)((value >> 56) & 0xFF));
+                    Write((byte)((value >> 48) & 0xFF));
+                    Write((byte)((value >> 40) & 0xFF));
+                    Write((byte)((value >> 32) & 0xFF));
+                    Write((byte)((value >> 24) & 0xFF));
+                    Write((byte)((value >> 16) & 0xFF));
+                    Write((byte)((value >> 8) & 0xFF));
+                    Write((byte)((value >> 0) & 0xFF));
                 }
             }
         }
-        
+
         private bool WriteBinary(Stream output)
         {
             using (var writer = new BinaryWriter(output))
             {
                 var data = new MemoryStream();
-                using (var dataWriter = new BinaryWriter(data))
+                using (var dataWriter = new EncodedWriter(data))
                 {
                     Timestamp previous = m_previous;
 
@@ -360,8 +339,8 @@ Options: -log LOG     Uses the file LOG as log for the activity
                     {
                         m_activityList.ForEach((a) =>
                         {
-                            dataWriter.Write(BinaryEncoding.Encode((a.Timestamp - previous).Milliseconds));
-                            dataWriter.Write(BinaryEncoding.Encode(a.Type.Id));
+                            dataWriter.WriteEncoded((a.Timestamp - previous).Milliseconds);
+                            dataWriter.WriteEncoded(a.Type.Id);
                             dataWriter.Write(a.Info.ToString());
 
                             previous = a.Timestamp;
