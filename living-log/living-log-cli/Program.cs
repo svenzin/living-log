@@ -10,7 +10,21 @@ using System.IO;
 
 namespace living_log_cli
 {
-    class Program
+    public static class Converter
+    {
+        public static ulong Convert(long value)
+        {
+            if (value >= 0) return (ulong)value << 1;
+            return (~((ulong)value) << 1) | (ulong)1;
+        }
+        public static long Convert(ulong value)
+        {
+            if ((value & 1) == 0) return (long)(value >> 1);
+            return (long)(~(value >> 1));
+        }
+    }
+
+    public class Program
     {
         #region Console exit handler
         
@@ -196,20 +210,6 @@ Options: -log LOG     Uses the file LOG as log for the activity
                     m_previous = previous;
                     return true;
                 }
-            }
-        }
-
-        public static class Converter
-        {
-            public static ulong Convert(long value)
-            {
-                if (value >= 0) return (ulong)value << 1;
-                return ~((ulong)value) << 1;
-            }
-            public static long Convert(ulong value)
-            {
-                if ((value & 1) == 0) return (long)(value >> 1);
-                return (long)(~(value >> 1));
             }
         }
 
