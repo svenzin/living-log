@@ -31,14 +31,5 @@ namespace living_log_tests
             Assert.AreEqual(long.MinValue, Converter.Convert(Converter.Convert(long.MinValue)));
             Assert.AreEqual(long.MaxValue, Converter.Convert(Converter.Convert(long.MaxValue)));
         }
-
-        [TestMethod]
-        public void Encoded_Writer()
-        {
-            var writer = new Program.EncodedWriter(new MemoryStream());
-            writer.WriteEncoded(0xF0912347423);
-            writer.BaseStream.Position = 0;
-            writer.WriteEncoded(0xFFFF);
-        }
     }
 }
