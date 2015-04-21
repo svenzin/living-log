@@ -40,16 +40,16 @@ namespace living_log_cli
         public MouseLogger()
         {
             m_mouse = new MouseHookListener(new GlobalHooker());
-            m_mouse.MouseMoveExt += (s, e) => { Invoke(Categories.Mouse_Move, new MouseMoveData(e)); };
-            m_mouse.MouseDownExt += (s, e) => { Invoke(Categories.Mouse_Down, new MouseButtonData(e)); };
-            m_mouse.MouseUp += (s, e) => { Invoke(Categories.Mouse_Up, new MouseButtonData(e as MouseEventExtArgs)); };
-            m_mouse.MouseClickExt += (s, e) => { Invoke(Categories.Mouse_Click, new MouseButtonData(e)); };
-            m_mouse.MouseDoubleClick += (s, e) => { Invoke(Categories.Mouse_DoubleClick, new MouseButtonData(e as MouseEventExtArgs)); };
-            m_mouse.MouseWheel += (s, e) => { Invoke(Categories.Mouse_Wheel, new MouseWheelData(e as MouseEventExtArgs)); };
-            m_mouse.Enabled = this.Enabled;
+            m_mouse.MouseMoveExt += (s, e) => { if (Enabled) Invoke(Categories.Mouse_Move, new MouseMoveData(e)); };
+            m_mouse.MouseDownExt += (s, e) => { if (Enabled)  Invoke(Categories.Mouse_Down, new MouseButtonData(e)); };
+            m_mouse.MouseUp += (s, e) => { if (Enabled) Invoke(Categories.Mouse_Up, new MouseButtonData(e as MouseEventExtArgs)); };
+            m_mouse.MouseClickExt += (s, e) => { if (Enabled) Invoke(Categories.Mouse_Click, new MouseButtonData(e)); };
+            m_mouse.MouseDoubleClick += (s, e) => { if (Enabled)  Invoke(Categories.Mouse_DoubleClick, new MouseButtonData(e as MouseEventExtArgs)); };
+            m_mouse.MouseWheel += (s, e) => { if (Enabled)  Invoke(Categories.Mouse_Wheel, new MouseWheelData(e as MouseEventExtArgs)); };
+            m_mouse.Enabled = true;
         }
 
-        protected override void Enable() { m_mouse.Enabled = this.Enabled; }
-        protected override void Disable() { m_mouse.Enabled = this.Enabled; }
+        protected override void Enable() { }
+        protected override void Disable() { }
     }
 }

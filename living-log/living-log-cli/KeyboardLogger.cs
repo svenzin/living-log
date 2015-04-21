@@ -32,13 +32,13 @@ namespace living_log_cli
         public KeyboardLogger()
         {
             m_keyboard = new KeyboardHookListener(new GlobalHooker());
-            m_keyboard.KeyUp += (s, e) => { Invoke(Categories.Keyboard_KeyUp, new KeyboardKeyData(e as KeyEventArgsExt)); };
-            m_keyboard.KeyDown += (s, e) => { Invoke(Categories.Keyboard_KeyDown, new KeyboardKeyData(e as KeyEventArgsExt)); };
-            m_keyboard.KeyPress += (s, e) => { Invoke(Categories.Keyboard_KeyPress, new KeyboardPressData(e as KeyPressEventArgsExt)); };
-            m_keyboard.Enabled = this.Enabled;
+            m_keyboard.KeyUp += (s, e) => { if (Enabled) Invoke(Categories.Keyboard_KeyUp, new KeyboardKeyData(e as KeyEventArgsExt)); };
+            m_keyboard.KeyDown += (s, e) => { if (Enabled) Invoke(Categories.Keyboard_KeyDown, new KeyboardKeyData(e as KeyEventArgsExt)); };
+            m_keyboard.KeyPress += (s, e) => { if (Enabled) Invoke(Categories.Keyboard_KeyPress, new KeyboardPressData(e as KeyPressEventArgsExt)); };
+            m_keyboard.Enabled = true;
         }
 
-        protected override void Enable() { m_keyboard.Enabled = this.Enabled; }
-        protected override void Disable() { m_keyboard.Enabled = this.Enabled; }
+        protected override void Enable() { }
+        protected override void Disable() { }
     }
 }
