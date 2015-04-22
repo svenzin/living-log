@@ -98,7 +98,8 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 return;
             }
 
-            Console.WriteLine("Using " + Constants.LogFilename + " as log file"); 
+            Console.WriteLine("Using " + Constants.LogFilename + " as log file");
+            Console.WriteLine();
 
             System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.BelowNormal;
             Program p = new Program(Constants.LogFilename);
@@ -132,6 +133,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
             string command = string.Empty;
             do
             {
+                Output.Write("ll > ");
                 command = (Input.ReadLine() ?? "exit").Trim();
                 if (command.Equals("pause") || command.Equals("p"))
                 {
@@ -198,7 +200,12 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
         private void Dump()
         {
+            var pos = new { x = Console.CursorLeft, y = Console.CursorTop };
+            Console.SetCursorPosition(0, 0);
+            Console.WriteLine("Using " + Constants.LogFilename + " as log file");
             Console.WriteLine("Writing " + m_activityList.Count + " activities");
+            Console.SetCursorPosition(pos.x, pos.y);
+
             lock (locker)
             {
                 try
