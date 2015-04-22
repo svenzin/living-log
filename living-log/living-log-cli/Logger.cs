@@ -20,7 +20,7 @@ namespace living_log_cli
                 if (m_enabled != value)
                 {
                     m_enabled = value;
-                    if (Enabled) Enable(); else Disable();
+                    if (!Enabled) Enable(); else Disable();
                 }
             }
         }
