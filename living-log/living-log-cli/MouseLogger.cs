@@ -47,9 +47,15 @@ namespace living_log_cli
             m_mouse.MouseDoubleClick += (s, e) => { if (Enabled)  Invoke(Categories.Mouse_DoubleClick, new MouseButtonData(e as MouseEventExtArgs)); };
             m_mouse.MouseWheel += (s, e) => { if (Enabled)  Invoke(Categories.Mouse_Wheel, new MouseWheelData(e as MouseEventExtArgs)); };
             m_mouse.Enabled = true;
+
+            m_enabled = false;
         }
 
-        protected override void Enable() { }
-        protected override void Disable() { }
+        protected bool m_enabled;
+        public override bool Enabled
+        {
+            get { return m_enabled; }
+            set { m_enabled = value; }
+        }
     }
 }

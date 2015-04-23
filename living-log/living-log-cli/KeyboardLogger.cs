@@ -36,9 +36,15 @@ namespace living_log_cli
             m_keyboard.KeyDown += (s, e) => { if (Enabled) Invoke(Categories.Keyboard_KeyDown, new KeyboardKeyData(e as KeyEventArgsExt)); };
             m_keyboard.KeyPress += (s, e) => { if (Enabled) Invoke(Categories.Keyboard_KeyPress, new KeyboardPressData(e as KeyPressEventArgsExt)); };
             m_keyboard.Enabled = true;
+
+            m_enabled = false;
         }
 
-        protected override void Enable() { }
-        protected override void Disable() { }
+        protected bool m_enabled;
+        public override bool Enabled
+        {
+            get { return m_enabled; }
+            set { m_enabled = value; }
+        }
     }
 }
