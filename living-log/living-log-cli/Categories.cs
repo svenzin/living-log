@@ -22,5 +22,28 @@ namespace living_log_cli
         public static Category Keyboard_KeyDown = new Category() { Id = 7, Name = "Keyboard_KeyDown" };
         public static Category Keyboard_KeyUp = new Category() { Id = 8, Name = "Keyboard_KeyUp" };
         public static Category Keyboard_KeyPress = new Category() { Id = 9, Name = "Keyboard_KeyPress" };
+
+        public static Category get(int id)
+        {
+            var categories = new Category[] {
+                 LivingLog_Startup,
+                 LivingLog_Sync,
+                 LivingLog_Exit,
+                
+                 Mouse_Move,
+                 Mouse_Down,
+                 Mouse_Up,
+                 Mouse_Click,
+                 Mouse_DoubleClick,
+                 Mouse_Wheel,
+                
+                 Keyboard_KeyDown,
+                 Keyboard_KeyUp,
+                 Keyboard_KeyPress,
+            };
+            return categories.FirstOrDefault((c) => { return c.Id == id; });
+        }
+
+        public static Func<string, OutOfMemoryException IData>
     }
 }
