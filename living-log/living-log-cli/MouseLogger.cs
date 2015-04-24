@@ -18,6 +18,20 @@ namespace living_log_cli
             public MouseButtons Button;
             public MouseButtonData(MouseEventExtArgs e) { Button = e.Button; }
             public override string ToString() { return Button.ToString(); }
+
+            protected MouseButtonData() { }
+            public static bool TryParse(string s, out IData result)
+            {
+                result = null;
+
+                if (string.IsNullOrEmpty(s)) return false;
+
+                MouseButtons b;
+                if (!System.Enum.TryParse(s, out b)) return false;
+
+                result = new MouseButtonData() { Button = b };
+                return true;
+            }
         }
 
         public class MouseWheelData : IData
@@ -25,6 +39,20 @@ namespace living_log_cli
             public int Delta;
             public MouseWheelData(MouseEventExtArgs e) { Delta = e.Delta; }
             public override string ToString() { return Delta.ToString(); }
+
+            protected MouseWheelData() { }
+            public static bool TryParse(string s, out IData result)
+            {
+                result = null;
+
+                if (string.IsNullOrEmpty(s)) return false;
+
+                int d;
+                if (!int.TryParse(s, out d)) return false;
+
+                result = new MouseWheelData() { Delta = d };
+                return true;
+            }
         }
 
         public class MouseMoveData : IData
@@ -33,6 +61,26 @@ namespace living_log_cli
             public int Y;
             public MouseMoveData(MouseEventExtArgs e) { X = e.X; Y = e.Y; }
             public override string ToString() { return X.ToString() + " " + Y.ToString(); }
+
+            protected MouseMoveData() { }
+            public static bool TryParse(string s, out IData result)
+            {
+                result = null;
+
+                if (string.IsNullOrEmpty(s)) return false;
+
+                var items = s.Split(' ');
+                if (items.Length != 2) return false;
+
+                int x;
+                if (!int.TryParse(items[0], out x)) return false;
+
+                int y;
+                if (!int.TryParse(items[1], out y)) return false;
+
+                result = new MouseMoveData() { X = x, Y = y };
+                return true;
+            }
         }
 
         private MouseHookListener m_mouse;

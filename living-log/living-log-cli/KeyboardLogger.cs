@@ -18,6 +18,20 @@ namespace living_log_cli
             public Keys Key;
             public KeyboardKeyData(KeyEventArgsExt e) { Key = e.KeyCode; }
             public override string ToString() { return Key.ToString(); }
+
+            protected KeyboardKeyData() { }
+            public static bool TryParse(string s, out IData result)
+            {
+                result = null;
+
+                if (string.IsNullOrEmpty(s)) return false;
+
+                Keys k;
+                if (!System.Enum.TryParse(s, out k)) return false;
+
+                result = new KeyboardKeyData() { Key = k };
+                return true;
+            }
         }
 
         public class KeyboardPressData : IData
@@ -25,6 +39,20 @@ namespace living_log_cli
             public char Character;
             public KeyboardPressData(KeyPressEventArgsExt e) { Character = e.KeyChar; }
             public override string ToString() { return Character.ToString(); }
+
+            protected KeyboardPressData() { }
+            public static bool TryParse(string s, out IData result)
+            {
+                result = null;
+
+                if (string.IsNullOrEmpty(s)) return false;
+
+                char c;
+                if (!char.TryParse(s, out c)) return false;
+
+                result = new KeyboardPressData() { Character = c };
+                return true;
+            }
         }
 
         private KeyboardHookListener m_keyboard;

@@ -8,6 +8,7 @@ using System.Windows.Forms;
 using System.Drawing;
 using System.IO;
 using System.Threading;
+using System.Globalization;
 
 namespace living_log_cli
 {
@@ -151,9 +152,100 @@ Options: -log LOG     Uses the file LOG as log for the activity
                         Output.WriteLine("Resumed");
                     }
                 }
+                if (command.Equals("split"))
+                {
+                    if (Enabled)
+                    {
+                        Output.WriteLine("Cannot split while logging. Please pause.");
+                    }
+                    else
+                    {
+                        if (File.Exists(m_filename))
+                        {
+                            var info = new FileInfo(m_filename);
+                            Output.WriteLine("File " + info.Name + " has " + ToHumanString(info.Length) + " bytes");
+
+                            var lines = File.ReadLines(m_filename);
+                            Output.WriteLine("File " + info.Name + " has " + ToHumanString(lines.Count()) + " lines");
+
+                            var i = m_filename.LastIndexOf('.');
+                            var name = (i >= 0) ? m_filename.Substring(0, i) : m_filename;
+                            var ext = (i >= 0) ? m_filename.Substring(i) : String.Empty;
+                            Output.WriteLine("Files of names " + name + ".MM-YY" + ext + " will be generated");
+
+                            Timestamp t0 = new Timestamp(DateTime.MinValue);
+                            Timestamp t;
+                            Timestamp delta;
+
+                            i = -1;
+                            var line = lines.GetEnumerator();
+                            while (line.MoveNext())
+                            {
+                                ++i;
+
+                                Activity act;
+                                if (TryParseActivity(line.Current, out act))
+                                {
+                                    if (act.Type == Categories.LivingLog_Startup)
+                                    {
+                                        var sync = act.Info as LivingLogger.SyncData;
+                                        Output.WriteLine(act.Type.Name + " at " + sync.Timestamp.ToString() + " with version " + sync.Version);
+                                    }
+                                    if (act.Type == Categories.Mouse_Down)
+                                    {
+                                        var data = act.Info as MouseLogger.MouseButtonData;
+                                        Output.WriteLine(act.Type.Name + " at " + act.Timestamp.ToString() + " with button " + data.Button.ToString());
+                                    }
+                                    if (act.Type == Categories.Keyboard_KeyDown)
+                                    {
+                                        var data = act.Info as KeyboardLogger.KeyboardKeyData;
+                                        Output.WriteLine(act.Type.Name + " at " + act.Timestamp.ToString() + " with key " + data.Key.ToString());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             } while (!command.Equals("exit"));
 
             Program.ForceExit();
+        }
+
+        public bool TryParseActivity(string s, out Activity result)
+        {
+            result = null;
+            if (string.IsNullOrWhiteSpace(s)) return false;
+
+            var items = s.Split(new char[] { ' ' }, 3);
+            if (items.Length != 3) return false;
+
+            var dT = new Timestamp();
+            if (!long.TryParse(items[0], out dT.Milliseconds)) return false;
+
+            int type;
+            if (!int.TryParse(items[1], out type)) return false;
+
+            Category cat = Categories.get(type);
+            if (cat == null) return false;
+            
+            IData data;
+            if (!Categories.parser(cat)(items[2], out data)) return false;
+           
+            result = new Activity() { Timestamp = dT, Type = cat, Info = data };
+            return true;
+        }
+
+
+        public static string ToHumanString(long value)
+        {
+            string[] units = { "", "K", "M", "G", "T", "P", "E", "Z", "Y" };
+            int i = 0;
+            while (value > 1500)
+            {
+                value = value >> 10;
+                ++i;
+            }
+            return value.ToString() + units[i];
         }
         
         Program(string filename)
@@ -167,11 +259,11 @@ Options: -log LOG     Uses the file LOG as log for the activity
             m_living = new LivingLogger(Constants.SyncDelayInMs);
             m_living.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
 
-            m_mouse = new MouseLogger();
-            m_mouse.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
+            //m_mouse = new MouseLogger();
+            //m_mouse.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
 
-            m_keyboard = new KeyboardLogger();
-            m_keyboard.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
+            //m_keyboard = new KeyboardLogger();
+            //m_keyboard.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
 
             m_dumpTimer = new System.Timers.Timer()
             {
@@ -180,7 +272,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
             };
             m_dumpTimer.Elapsed += (s, e) => Dump();
 
-            Enabled = true;
+            Enabled = false;
         }
 
         bool Enabled
@@ -193,8 +285,8 @@ Options: -log LOG     Uses the file LOG as log for the activity
             {
                 m_dumpTimer.Enabled = value;
                 m_living.Enabled = value;
-                m_mouse.Enabled = value;
-                m_keyboard.Enabled = value;
+                //m_mouse.Enabled = value;
+                //m_keyboard.Enabled = value;
             }
         }
 

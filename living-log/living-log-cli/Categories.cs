@@ -22,5 +22,55 @@ namespace living_log_cli
         public static Category Keyboard_KeyDown = new Category() { Id = 7, Name = "Keyboard_KeyDown" };
         public static Category Keyboard_KeyUp = new Category() { Id = 8, Name = "Keyboard_KeyUp" };
         public static Category Keyboard_KeyPress = new Category() { Id = 9, Name = "Keyboard_KeyPress" };
+
+        public static Category get(int id)
+        {
+            var categories = new Category[] {
+                 LivingLog_Startup,
+                 LivingLog_Sync,
+                 LivingLog_Exit,
+                
+                 Mouse_Move,
+                 Mouse_Down,
+                 Mouse_Up,
+                 Mouse_Click,
+                 Mouse_DoubleClick,
+                 Mouse_Wheel,
+                
+                 Keyboard_KeyDown,
+                 Keyboard_KeyUp,
+                 Keyboard_KeyPress,
+            };
+            return categories.FirstOrDefault((c) => { return c.Id == id; });
+        }
+
+        public delegate bool TryParseIData(string s, out IData result);
+
+        public static bool NullParser(string s, out IData result) { result = null; return false; }
+        public static TryParseIData parser(Category c)
+        {
+            var parsers = new Dictionary<Category, TryParseIData>()
+            {
+                { LivingLog_Startup , LivingLogger.SyncData.TryParse },
+                { LivingLog_Sync    , LivingLogger.SyncData.TryParse },
+                { LivingLog_Exit    , LivingLogger.SyncData.TryParse },
+                                                           
+                { Mouse_Move        , MouseLogger.MouseMoveData.TryParse   },
+                { Mouse_Down        , MouseLogger.MouseButtonData.TryParse },
+                { Mouse_Up          , MouseLogger.MouseButtonData.TryParse },
+                { Mouse_Click       , MouseLogger.MouseButtonData.TryParse },
+                { Mouse_DoubleClick , MouseLogger.MouseButtonData.TryParse },
+                { Mouse_Wheel       , MouseLogger.MouseWheelData.TryParse  },
+                                                           
+                { Keyboard_KeyDown  , KeyboardLogger.KeyboardKeyData.TryParse   },
+                { Keyboard_KeyUp    , KeyboardLogger.KeyboardKeyData.TryParse   },
+                { Keyboard_KeyPress , KeyboardLogger.KeyboardPressData.TryParse },
+            };
+
+            TryParseIData parser;
+            if (!parsers.TryGetValue(c, out parser)) parser = NullParser;
+            
+            return parser;
+        }
     }
 }
