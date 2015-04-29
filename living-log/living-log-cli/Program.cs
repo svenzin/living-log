@@ -210,7 +210,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
             Program.ForceExit();
         }
-
+        
         public bool TryParseActivity(string s, out Activity result)
         {
             result = null;
