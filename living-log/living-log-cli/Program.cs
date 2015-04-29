@@ -99,9 +99,6 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 return;
             }
 
-            Console.WriteLine("Using " + Constants.LogFilename + " as log file");
-            Console.WriteLine();
-
             System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.BelowNormal;
             Program p = new Program(Constants.LogFilename);
             SetExitHandler((t) =>
@@ -110,6 +107,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 return true;
             });
 
+            Console.SetCursorPosition(0, 4);
             new Thread(() => { p.REPL(Console.In, Console.Out); }) { IsBackground = true }.Start();
             System.Windows.Forms.Application.Run();
 
@@ -124,6 +122,16 @@ Options: -log LOG     Uses the file LOG as log for the activity
             System.Windows.Forms.Application.Exit();
         }
 
+        private void Header(string message)
+        {
+            var pos = new { x = Console.CursorLeft, y = Console.CursorTop };
+            Console.SetCursorPosition(Console.WindowLeft, Console.WindowTop);
+            Console.WriteLine(("Using " + Constants.LogFilename + " as log file").PadRight(Console.BufferWidth - 1));
+            Console.WriteLine(message.PadRight(Console.BufferWidth - 1));
+            Console.WriteLine(string.Empty.PadRight(Console.BufferWidth - 1));
+            Console.SetCursorPosition(pos.x, pos.y);
+        }
+        
         private TextReader Input;
         private TextWriter Output;
         void REPL(TextReader input, TextWriter output)
@@ -134,6 +142,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
             string command = string.Empty;
             do
             {
+                Header(string.Empty);
                 Output.Write("ll > ");
                 command = (Input.ReadLine() ?? "exit").Trim();
                 if (command.Equals("pause") || command.Equals("p"))
@@ -152,7 +161,18 @@ Options: -log LOG     Uses the file LOG as log for the activity
                         Output.WriteLine("Resumed");
                     }
                 }
-                if (command.Equals("split"))
+                else if (command.Equals("stats"))
+                {
+                    if (File.Exists(m_filename))
+                    {
+                        var info = new FileInfo(m_filename);
+                        Output.WriteLine("File " + info.Name + " has " + ToHumanString(info.Length) + " bytes");
+
+                        var lines = File.ReadLines(m_filename);
+                        Output.WriteLine("File " + info.Name + " has " + ToHumanString(lines.Count()) + " lines");
+                    }
+                }
+                else if (command.Equals("split"))
                 {
                     if (Enabled)
                     {
@@ -162,47 +182,119 @@ Options: -log LOG     Uses the file LOG as log for the activity
                     {
                         if (File.Exists(m_filename))
                         {
-                            var info = new FileInfo(m_filename);
-                            Output.WriteLine("File " + info.Name + " has " + ToHumanString(info.Length) + " bytes");
-
-                            var lines = File.ReadLines(m_filename);
-                            Output.WriteLine("File " + info.Name + " has " + ToHumanString(lines.Count()) + " lines");
-
                             var i = m_filename.LastIndexOf('.');
                             var name = (i >= 0) ? m_filename.Substring(0, i) : m_filename;
                             var ext = (i >= 0) ? m_filename.Substring(i) : String.Empty;
-                            Output.WriteLine("Files of names " + name + ".MM-YY" + ext + " will be generated");
+                            Output.WriteLine("Files of names " + name + ".YYYY-MM" + ext + " will be generated");
 
-                            Timestamp t0 = new Timestamp(DateTime.MinValue);
-                            Timestamp t;
-                            Timestamp delta;
+                            long counter = 0;
+                            Timestamp t = new Timestamp(DateTime.MinValue);
+                            System.Diagnostics.Stopwatch w = new System.Diagnostics.Stopwatch();
 
-                            i = -1;
-                            var line = lines.GetEnumerator();
+                            w.Start();
+                            var activities = File.ReadLines(m_filename)
+                                .Select((s) =>
+                                {
+                                    ++counter;
+                                    if ((counter % 1000000) == 0)
+                                    {
+                                        w.Stop();
+                                        Console.WriteLine(counter + " " + w.ElapsedMilliseconds);
+                                        w.Restart();
+                                    }
+                                    
+                                    Activity act = null;
+                                    if (TryParseActivity(s, out act))
+                                    {
+                                        if ((act.Type == Categories.LivingLog_Startup) ||
+                                            (act.Type == Categories.LivingLog_Sync) ||
+                                            (act.Type == Categories.LivingLog_Exit))
+                                        {
+                                            var t0 = (act.Info as LivingLogger.SyncData).Timestamp;
+                                            t = new Timestamp(t0);
+
+                                            act.Timestamp = t;
+                                        }
+                                        else
+                                        {
+                                            t = t + act.Timestamp;
+                                            act.Timestamp = t;
+                                        }
+                                    }
+                                    return act;
+                                })
+                                .Where((a) => a != null);
+                            
+                            while (activities.FirstOrDefault() != null)
+                            {
+                                var groups = activities
+                                    //.Take(10000000)
+                                    .GroupBy((a) =>
+                                    {
+                                        var at = new DateTime(Constants.TicksPerMs * a.Timestamp.Milliseconds);
+                                        return new { Year = at.Year, Month = at.Month };
+                                    });
+
+                                foreach (var group in groups)
+                                {
+                                    Output.WriteLine(group.Key.Year.ToString().PadLeft(4, '0') + "-" + group.Key.Month.ToString().PadLeft(2, '0') + " has " + group.Count() + " activities");
+                                }
+
+                                //activities = activities.Skip(10000000);
+                                activities = activities.Take(0);
+                            }
+
+                            /*
+                            w.Start();
+                            var line = File.ReadLines(m_filename).GetEnumerator();
                             while (line.MoveNext())
                             {
-                                ++i;
-
-                                Activity act;
+                                ++counter;
+                                if ((counter % 1000000) == 0)
+                                {
+                                    w.Stop();
+                                    Console.WriteLine(counter + " " + w.ElapsedMilliseconds);
+                                    w.Restart();
+                                }
+                                Activity act = null;
                                 if (TryParseActivity(line.Current, out act))
                                 {
-                                    if (act.Type == Categories.LivingLog_Startup)
+                                    if ((act.Type == Categories.LivingLog_Startup) ||
+                                        (act.Type == Categories.LivingLog_Sync) ||
+                                        (act.Type == Categories.LivingLog_Exit))
                                     {
-                                        var sync = act.Info as LivingLogger.SyncData;
-                                        Output.WriteLine(act.Type.Name + " at " + sync.Timestamp.ToString() + " with version " + sync.Version);
+                                        var t0 = (act.Info as LivingLogger.SyncData).Timestamp;
+                                        t = new Timestamp(t0);
+
+                                        act.Timestamp = t;
                                     }
-                                    if (act.Type == Categories.Mouse_Down)
+                                    else
                                     {
-                                        var data = act.Info as MouseLogger.MouseButtonData;
-                                        Output.WriteLine(act.Type.Name + " at " + act.Timestamp.ToString() + " with button " + data.Button.ToString());
+                                        t = t + act.Timestamp;
+                                        act.Timestamp = t;
                                     }
-                                    if (act.Type == Categories.Keyboard_KeyDown)
-                                    {
-                                        var data = act.Info as KeyboardLogger.KeyboardKeyData;
-                                        Output.WriteLine(act.Type.Name + " at " + act.Timestamp.ToString() + " with key " + data.Key.ToString());
-                                    }
+                                    
+                                    //if (act.Type == Categories.LivingLog_Startup)
+                                    //{
+                                    //    var sync = act.Info as LivingLogger.SyncData;
+                                    //    Output.WriteLine(act.Type.Name.PadRight(20) + " at " + sync.Timestamp.ToString() + " with version " + sync.Version);
+                                    //}
+                                    //if (act.Type == Categories.Mouse_Down)
+                                    //{
+                                    //    var data = act.Info as MouseLogger.MouseButtonData;
+                                    //    Output.WriteLine(act.Type.Name.PadRight(20) + " at " + 
+                                    //        new DateTime(Constants.TicksPerMs * act.Timestamp.Milliseconds).ToString(Constants.SyncFormat, CultureInfo.InvariantCulture)
+                                    //        + " with button " + data.Button.ToString());
+                                    //}
+                                    //if (act.Type == Categories.Keyboard_KeyDown)
+                                    //{
+                                    //    var data = act.Info as KeyboardLogger.KeyboardKeyData;
+                                    //    Output.WriteLine(act.Type.Name.PadRight(20) + " at " +
+                                    //        new DateTime(Constants.TicksPerMs * act.Timestamp.Milliseconds).ToString(Constants.SyncFormat, CultureInfo.InvariantCulture) 
+                                    //        + " with key " + data.Key.ToString());
+                                    //}
                                 }
-                            }
+                            }*/
                         }
                     }
                 }
@@ -210,7 +302,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
             Program.ForceExit();
         }
-        
+
         public bool TryParseActivity(string s, out Activity result)
         {
             result = null;
@@ -259,11 +351,11 @@ Options: -log LOG     Uses the file LOG as log for the activity
             m_living = new LivingLogger(Constants.SyncDelayInMs);
             m_living.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
 
-            m_mouse = new MouseLogger();
-            m_mouse.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
+            //m_mouse = new MouseLogger();
+            //m_mouse.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
 
-            m_keyboard = new KeyboardLogger();
-            m_keyboard.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
+            //m_keyboard = new KeyboardLogger();
+            //m_keyboard.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
 
             m_dumpTimer = new System.Timers.Timer()
             {
@@ -285,18 +377,14 @@ Options: -log LOG     Uses the file LOG as log for the activity
             {
                 m_dumpTimer.Enabled = value;
                 m_living.Enabled = value;
-                m_mouse.Enabled = value;
-                m_keyboard.Enabled = value;
+                //m_mouse.Enabled = value;
+                //m_keyboard.Enabled = value;
             }
         }
 
         private void Dump()
         {
-            var pos = new { x = Console.CursorLeft, y = Console.CursorTop };
-            Console.SetCursorPosition(0, 0);
-            Console.WriteLine("Using " + Constants.LogFilename + " as log file");
-            Console.WriteLine("Writing " + m_activityList.Count + " activities");
-            Console.SetCursorPosition(pos.x, pos.y);
+            Header("Writing " + m_activityList.Count + " activities");
 
             lock (locker)
             {

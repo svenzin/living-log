@@ -23,33 +23,28 @@ namespace living_log_cli
         public static Category Keyboard_KeyUp = new Category() { Id = 8, Name = "Keyboard_KeyUp" };
         public static Category Keyboard_KeyPress = new Category() { Id = 9, Name = "Keyboard_KeyPress" };
 
-        public static Category get(int id)
+        private static Dictionary<int, Category> categories;
+        private static Dictionary<Category, TryParseIData> parsers;
+
+        static Categories()
         {
-            var categories = new Category[] {
-                 LivingLog_Startup,
-                 LivingLog_Sync,
-                 LivingLog_Exit,
-                
-                 Mouse_Move,
-                 Mouse_Down,
-                 Mouse_Up,
-                 Mouse_Click,
-                 Mouse_DoubleClick,
-                 Mouse_Wheel,
-                
-                 Keyboard_KeyDown,
-                 Keyboard_KeyUp,
-                 Keyboard_KeyPress,
+            categories = new Dictionary<int, Category>()
+            {
+                { LivingLog_Startup.Id , LivingLog_Startup },
+                { LivingLog_Sync.Id    , LivingLog_Sync    },
+                { LivingLog_Exit.Id    , LivingLog_Exit    },
+                { Mouse_Move.Id        , Mouse_Move        },
+                { Mouse_Down.Id        , Mouse_Down        },
+                { Mouse_Up.Id          , Mouse_Up          },
+                { Mouse_Click.Id       , Mouse_Click       },
+                { Mouse_DoubleClick.Id , Mouse_DoubleClick },
+                { Mouse_Wheel.Id       , Mouse_Wheel       },
+                { Keyboard_KeyDown.Id  , Keyboard_KeyDown  },
+                { Keyboard_KeyUp.Id    , Keyboard_KeyUp    },
+                { Keyboard_KeyPress.Id , Keyboard_KeyPress },
             };
-            return categories.FirstOrDefault((c) => { return c.Id == id; });
-        }
 
-        public delegate bool TryParseIData(string s, out IData result);
-
-        public static bool NullParser(string s, out IData result) { result = null; return false; }
-        public static TryParseIData parser(Category c)
-        {
-            var parsers = new Dictionary<Category, TryParseIData>()
+            parsers = new Dictionary<Category, TryParseIData>()
             {
                 { LivingLog_Startup , LivingLogger.SyncData.TryParse },
                 { LivingLog_Sync    , LivingLogger.SyncData.TryParse },
@@ -66,10 +61,22 @@ namespace living_log_cli
                 { Keyboard_KeyUp    , KeyboardLogger.KeyboardKeyData.TryParse   },
                 { Keyboard_KeyPress , KeyboardLogger.KeyboardPressData.TryParse },
             };
+        }
 
+        public static Category get(int id)
+        {
+            Category result;
+            if (!categories.TryGetValue(id, out result)) return null;
+            return result;
+        }
+
+        public delegate bool TryParseIData(string s, out IData result);
+
+        public static bool NullParser(string s, out IData result) { result = null; return false; }
+        public static TryParseIData parser(Category c)
+        {
             TryParseIData parser;
-            if (!parsers.TryGetValue(c, out parser)) parser = NullParser;
-            
+            if (!parsers.TryGetValue(c, out parser)) parser = NullParser;    
             return parser;
         }
     }
