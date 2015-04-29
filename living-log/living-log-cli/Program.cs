@@ -259,11 +259,11 @@ Options: -log LOG     Uses the file LOG as log for the activity
             m_living = new LivingLogger(Constants.SyncDelayInMs);
             m_living.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
 
-            //m_mouse = new MouseLogger();
-            //m_mouse.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
+            m_mouse = new MouseLogger();
+            m_mouse.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
 
-            //m_keyboard = new KeyboardLogger();
-            //m_keyboard.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
+            m_keyboard = new KeyboardLogger();
+            m_keyboard.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
 
             m_dumpTimer = new System.Timers.Timer()
             {
@@ -272,7 +272,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
             };
             m_dumpTimer.Elapsed += (s, e) => Dump();
 
-            Enabled = false;
+            Enabled = true;
         }
 
         bool Enabled
@@ -285,8 +285,8 @@ Options: -log LOG     Uses the file LOG as log for the activity
             {
                 m_dumpTimer.Enabled = value;
                 m_living.Enabled = value;
-                //m_mouse.Enabled = value;
-                //m_keyboard.Enabled = value;
+                m_mouse.Enabled = value;
+                m_keyboard.Enabled = value;
             }
         }
 
