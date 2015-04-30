@@ -40,6 +40,71 @@ namespace living_log_cli
         }
     }
 
+    public class ParseExt
+    {
+        public static bool TryQuickParseInt(string s, int start, int length, out int result)
+        {
+            if (s == null) throw new ArgumentNullException("s");
+            if (start < 0) throw new ArgumentOutOfRangeException("start");
+            if (length <= 0) throw new ArgumentOutOfRangeException("length");
+            if (start + length > s.Length) throw new IndexOutOfRangeException();
+
+            bool neg = (s[start] == '-');
+            if (neg)
+            {
+                ++start;
+                --length;
+            }
+
+            result = 0;
+            while (length > 0)
+            {
+                int i = s[start] - '0';
+                if ((i < 0) || (i > 9))
+                {
+                    result = 0;
+                    return false;
+                }
+                result = 10 * result + i;
+                --length;
+                ++start;
+            }
+            if (neg) result = -result;
+            return true;
+        }
+
+        public static bool TryQuickParseLong(string s, int start, int length, out long result)
+        {
+            if (s == null) throw new ArgumentNullException("s");
+            if (start < 0) throw new ArgumentOutOfRangeException("start");
+            if (length <= 0) throw new ArgumentOutOfRangeException("length");
+            if (start + length > s.Length) throw new IndexOutOfRangeException();
+
+            bool neg = (s[start] == '-');
+            if (neg)
+            {
+                ++start;
+                --length;
+            }
+
+            result = 0;
+            while (length > 0)
+            {
+                long i = s[start] - '0';
+                if ((i < 0) || (i > 9))
+                {
+                    result = 0;
+                    return false;
+                }
+                result = 10 * result + i;
+                --length;
+                ++start;
+            }
+            if (neg) result = -result;
+            return true;
+        }
+    }
+
     class Program
     {
         #region Console exit handler
@@ -280,20 +345,24 @@ Options: -log LOG     Uses the file LOG as log for the activity
             result = null;
             if (string.IsNullOrWhiteSpace(s)) return false;
 
-            var items = s.Split(new char[] { ' ' }, 3);
-            if (items.Length != 3) return false;
+            int i0 = s.IndexOf(' ');
+            if (i0 == -1) return false;
+
+            int i1 = s.IndexOf(' ', i0 + 1);
+            if (i1 == -1) return false;
+            if (i1 == s.Length - 1) return false;
 
             var dT = new Timestamp();
-            if (!long.TryParse(items[0], out dT.Milliseconds)) return false;
+            if (!ParseExt.TryQuickParseLong(s, 0, i0, out dT.Milliseconds)) return false;
 
             int type;
-            if (!int.TryParse(items[1], out type)) return false;
+            if (!ParseExt.TryQuickParseInt(s, i0 + 1, i1 - i0 - 1, out type)) return false;
 
             Category cat = Categories.get(type);
             if (cat == null) return false;
             
             IData data;
-            if (!Categories.parser(cat)(items[2], out data)) return false;
+            if (!Categories.parser(cat)(s.Substring(i1 + 1), out data)) return false;
            
             result = new Activity() { Timestamp = dT, Type = cat, Info = data };
             return true;

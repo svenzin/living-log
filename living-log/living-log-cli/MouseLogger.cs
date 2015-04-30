@@ -48,7 +48,7 @@ namespace living_log_cli
                 if (string.IsNullOrEmpty(s)) return false;
 
                 int d;
-                if (!int.TryParse(s, out d)) return false;
+                if (!ParseExt.TryQuickParseInt(s, 0, s.Length, out d)) return false;
 
                 result = new MouseWheelData() { Delta = d };
                 return true;
@@ -69,14 +69,17 @@ namespace living_log_cli
 
                 if (string.IsNullOrEmpty(s)) return false;
 
-                var items = s.Split(' ');
-                if (items.Length != 2) return false;
+                int i0 = s.IndexOf(' ');
+                if (i0 == -1) return false;
+
+                int i1 = s.IndexOf(' ', i0 + 1);
+                if (i1 != -1) return false;
 
                 int x;
-                if (!int.TryParse(items[0], out x)) return false;
+                if (!ParseExt.TryQuickParseInt(s, 0, i0, out x)) return false;
 
                 int y;
-                if (!int.TryParse(items[1], out y)) return false;
+                if (!ParseExt.TryQuickParseInt(s, i0 + 1, s.Length - i0 - 1, out y)) return false;
 
                 result = new MouseMoveData() { X = x, Y = y };
                 return true;
