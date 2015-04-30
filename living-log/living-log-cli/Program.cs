@@ -12,6 +12,34 @@ using System.Globalization;
 
 namespace living_log_cli
 {
+    public static class EnumerableBlocking
+    {
+        static IList<TSource> ReadBlock<TSource>(IEnumerator<TSource> e, int count)
+        {
+            var block = new List<TSource>(count);
+            while ((count > 0) && e.MoveNext())
+            {
+                --count;
+                block.Add(e.Current);
+            }
+            return block;
+        }
+
+        public static IEnumerable<IList<TSource>> ReadBlocks<TSource>(this IEnumerable<TSource> source, int blockSize)
+        {
+            if (source == null) throw new ArgumentNullException("source");
+            if (blockSize < 1) throw new ArgumentOutOfRangeException("blockSize");
+
+            IEnumerator<TSource> e = source.GetEnumerator();
+            while (true)
+            {
+                var block = ReadBlock(e, blockSize);
+                if (block.Count > 0) yield return block;
+                else yield break;
+            }
+        }
+    }
+
     class Program
     {
         #region Console exit handler
@@ -224,11 +252,10 @@ Options: -log LOG     Uses the file LOG as log for the activity
                                     return act;
                                 })
                                 .Where((a) => a != null);
-                            
-                            while (activities.FirstOrDefault() != null)
+
+                            foreach (var b in activities.ReadBlocks(10000000))
                             {
-                                var groups = activities
-                                    //.Take(10000000)
+                                var groups = b
                                     .GroupBy((a) =>
                                     {
                                         var at = new DateTime(Constants.TicksPerMs * a.Timestamp.Milliseconds);
@@ -239,62 +266,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                                 {
                                     Output.WriteLine(group.Key.Year.ToString().PadLeft(4, '0') + "-" + group.Key.Month.ToString().PadLeft(2, '0') + " has " + group.Count() + " activities");
                                 }
-
-                                //activities = activities.Skip(10000000);
-                                activities = activities.Take(0);
                             }
-
-                            /*
-                            w.Start();
-                            var line = File.ReadLines(m_filename).GetEnumerator();
-                            while (line.MoveNext())
-                            {
-                                ++counter;
-                                if ((counter % 1000000) == 0)
-                                {
-                                    w.Stop();
-                                    Console.WriteLine(counter + " " + w.ElapsedMilliseconds);
-                                    w.Restart();
-                                }
-                                Activity act = null;
-                                if (TryParseActivity(line.Current, out act))
-                                {
-                                    if ((act.Type == Categories.LivingLog_Startup) ||
-                                        (act.Type == Categories.LivingLog_Sync) ||
-                                        (act.Type == Categories.LivingLog_Exit))
-                                    {
-                                        var t0 = (act.Info as LivingLogger.SyncData).Timestamp;
-                                        t = new Timestamp(t0);
-
-                                        act.Timestamp = t;
-                                    }
-                                    else
-                                    {
-                                        t = t + act.Timestamp;
-                                        act.Timestamp = t;
-                                    }
-                                    
-                                    //if (act.Type == Categories.LivingLog_Startup)
-                                    //{
-                                    //    var sync = act.Info as LivingLogger.SyncData;
-                                    //    Output.WriteLine(act.Type.Name.PadRight(20) + " at " + sync.Timestamp.ToString() + " with version " + sync.Version);
-                                    //}
-                                    //if (act.Type == Categories.Mouse_Down)
-                                    //{
-                                    //    var data = act.Info as MouseLogger.MouseButtonData;
-                                    //    Output.WriteLine(act.Type.Name.PadRight(20) + " at " + 
-                                    //        new DateTime(Constants.TicksPerMs * act.Timestamp.Milliseconds).ToString(Constants.SyncFormat, CultureInfo.InvariantCulture)
-                                    //        + " with button " + data.Button.ToString());
-                                    //}
-                                    //if (act.Type == Categories.Keyboard_KeyDown)
-                                    //{
-                                    //    var data = act.Info as KeyboardLogger.KeyboardKeyData;
-                                    //    Output.WriteLine(act.Type.Name.PadRight(20) + " at " +
-                                    //        new DateTime(Constants.TicksPerMs * act.Timestamp.Milliseconds).ToString(Constants.SyncFormat, CultureInfo.InvariantCulture) 
-                                    //        + " with key " + data.Key.ToString());
-                                    //}
-                                }
-                            }*/
                         }
                     }
                 }
@@ -310,6 +282,15 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
             var items = s.Split(new char[] { ' ' }, 3);
             if (items.Length != 3) return false;
+            //int i0 = s.IndexOf(' ');
+            //if (i0 == -1) return false;
+
+            //int i1 = s.IndexOf(' ', i0 + 1);
+            //if (i1 == -1) return false;
+
+            //var items = new string[]{
+            //    s.Substring(0, i0), s.Substring(i0+1, i1-i0-1), s.Substring(i1+1)
+            //};
 
             var dT = new Timestamp();
             if (!long.TryParse(items[0], out dT.Milliseconds)) return false;
