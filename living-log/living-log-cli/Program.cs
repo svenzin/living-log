@@ -12,7 +12,7 @@ using System.Globalization;
 
 namespace living_log_cli
 {
-    public static class EnumerableBlocking
+    public static class EnumerableExt
     {
         static IList<TSource> ReadBlock<TSource>(IEnumerator<TSource> e, int count)
         {
@@ -282,15 +282,6 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
             var items = s.Split(new char[] { ' ' }, 3);
             if (items.Length != 3) return false;
-            //int i0 = s.IndexOf(' ');
-            //if (i0 == -1) return false;
-
-            //int i1 = s.IndexOf(' ', i0 + 1);
-            //if (i1 == -1) return false;
-
-            //var items = new string[]{
-            //    s.Substring(0, i0), s.Substring(i0+1, i1-i0-1), s.Substring(i1+1)
-            //};
 
             var dT = new Timestamp();
             if (!long.TryParse(items[0], out dT.Milliseconds)) return false;
