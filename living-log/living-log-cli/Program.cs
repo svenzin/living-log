@@ -234,9 +234,9 @@ Options: -log LOG     Uses the file LOG as log for the activity
                             long counter = 0;
                             var logger = new System.Timers.Timer();
                             logger.AutoReset = true;
-                            logger.Interval = 1000;
+                            logger.Interval = Constants.Second;
                             logger.Elapsed += (s, e) => { Header("activities: " + ToHumanString(counter).PadRight(8) + " elapsed: " + w.Elapsed.ToString()); };
-                            logger.Enabled = true;
+                            logger.Start();
 
                             w.Start();
                             var activities = File.ReadLines(m_filename)
@@ -267,7 +267,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                                 })
                                 .Do(() => ++counter);
 
-                            foreach (var activityBlock in activities.ReadBlocks(10000000))
+                            foreach (var activityBlock in activities.ReadBlocks(Constants.ReadingBlockSize))
                             {
                                 var groups = activityBlock
                                     .GroupBy((a) =>
@@ -308,7 +308,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                                                 Timestamp previous = groupActivities.First().Timestamp;
                                                 try
                                                 {
-                                                    foreach (var groupActivityBlock in groupActivities.ReadBlocks(1000))
+                                                    foreach (var groupActivityBlock in groupActivities.ReadBlocks(Constants.WritingBlockSize))
                                                     {
                                                         using (var text = new StringWriter())
                                                         {
@@ -328,6 +328,8 @@ Options: -log LOG     Uses the file LOG as log for the activity
                                     }
                                 }
                             }
+
+                            logger.Stop();
                         }
                     }
                 }

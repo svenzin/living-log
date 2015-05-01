@@ -10,11 +10,19 @@ namespace living_log_cli
     {
         public static long TicksPerMs = TimeSpan.TicksPerMillisecond;
 
-        public static int DumpDelayInMs = 60 * 1000; // 1 minute
+        public static int Millisecond = 1;
+        public static int Second = 1000;
+        public static int Minute = 60000;
+        public static int Hour = 3600000;
 
-        public static int SyncDelayInMs = 60 * 60 * 1000; // 1 hour
+        public static int DumpDelayInMs = Minute;
+
+        public static int SyncDelayInMs = Hour;
         public static string SyncFormat = "yyyy-MM-dd_HH:mm:ss.fff";
 
         public static string LogFilename = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"\living-log.log";
+
+        public static int ReadingBlockSize = 1000000;
+        public static int WritingBlockSize = 1000;
     }
 }
