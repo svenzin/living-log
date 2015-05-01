@@ -38,6 +38,19 @@ namespace living_log_cli
                 else yield break;
             }
         }
+
+        public static IEnumerable<TSource> Do<TSource>(this IEnumerable<TSource> source, Action f)
+        {
+            if (source == null) throw new ArgumentNullException("source");
+            if (f == null) throw new ArgumentNullException("f");
+
+            var e = source.GetEnumerator();
+            while (e.MoveNext())
+            {
+                f();
+                yield return e.Current;
+            }
+        }
     }
 
     class Program
@@ -215,28 +228,24 @@ Options: -log LOG     Uses the file LOG as log for the activity
                             var ext = (i >= 0) ? m_filename.Substring(i) : String.Empty;
                             Output.WriteLine("Files of names " + name + ".YYYY-MM" + ext + " will be generated");
 
-                            long counter = 0;
                             Timestamp t = new Timestamp(DateTime.MinValue);
                             System.Diagnostics.Stopwatch w = new System.Diagnostics.Stopwatch();
+
+                            long counter = 0;
+                            var logger = new System.Timers.Timer();
+                            logger.AutoReset = true;
+                            logger.Interval = 1000;
+                            logger.Elapsed += (s, e) => { Header("activities: " + ToHumanString(counter).PadRight(8) + " elapsed: " + w.Elapsed.ToString()); };
+                            logger.Enabled = true;
 
                             w.Start();
                             var activities = File.ReadLines(m_filename)
                                 .Select((s) =>
                                 {
-                                    ++counter;
-                                    if ((counter % 1000000) == 0)
-                                    {
-                                        w.Stop();
-                                        Console.WriteLine(counter + " " + w.ElapsedMilliseconds);
-                                        w.Restart();
-                                    }
-                                    
                                     Activity act = null;
                                     if (TryParseActivity(s, out act))
                                     {
-                                        if ((act.Type == Categories.LivingLog_Startup) ||
-                                            (act.Type == Categories.LivingLog_Sync) ||
-                                            (act.Type == Categories.LivingLog_Exit))
+                                        if (Categories.IsSync(act.Type))
                                         {
                                             var t0 = (act.Info as LivingLogger.SyncData).Timestamp;
                                             t = new Timestamp(t0);
@@ -251,20 +260,72 @@ Options: -log LOG     Uses the file LOG as log for the activity
                                     }
                                     return act;
                                 })
-                                .Where((a) => a != null);
+                                .Where((a) => a != null)
+                                .SkipWhile((a) =>
+                                {
+                                    return !Categories.IsSync(a.Type);
+                                })
+                                .Do(() => ++counter);
 
-                            foreach (var b in activities.ReadBlocks(10000000))
+                            foreach (var activityBlock in activities.ReadBlocks(10000000))
                             {
-                                var groups = b
+                                var groups = activityBlock
                                     .GroupBy((a) =>
                                     {
-                                        var at = new DateTime(Constants.TicksPerMs * a.Timestamp.Milliseconds);
+                                        var at = a.Timestamp.ToDateTime();
                                         return new { Year = at.Year, Month = at.Month };
                                     });
 
                                 foreach (var group in groups)
                                 {
-                                    Output.WriteLine(group.Key.Year.ToString().PadLeft(4, '0') + "-" + group.Key.Month.ToString().PadLeft(2, '0') + " has " + group.Count() + " activities");
+                                    //Output.WriteLine(group.Key.Year.ToString().PadLeft(4, '0') + "-" + group.Key.Month.ToString().PadLeft(2, '0') + " has " + group.Count() + " activities");
+
+                                    if (group.Any())
+                                    {
+                                        IEnumerable<Activity> groupActivities;
+                                        var item = group.First();
+                                        if (!Categories.IsSync(item.Type))
+                                        {
+                                            // When appending activities, always start with a sync activity
+                                            // This will help "resorting" activities if needed
+                                            groupActivities = new List<Activity>()
+                                            {
+                                                LivingLogger.GetSync(item.Timestamp)
+                                            }.Concat(group);
+                                        }
+                                        else
+                                        {
+                                            groupActivities = group;
+                                        }
+
+                                        lock (locker)
+                                        {
+                                            var filename = name + "." + group.Key.Year.ToString() + "-" + group.Key.Month.ToString().PadLeft(2, '0') + ext;
+                                            using (var writer = new StreamWriter(File.Open(filename, FileMode.Append, FileAccess.Write)))
+                                            {
+                                                Output.WriteLine("Writing to " + filename);
+
+                                                Timestamp previous = groupActivities.First().Timestamp;
+                                                try
+                                                {
+                                                    foreach (var groupActivityBlock in groupActivities.ReadBlocks(1000))
+                                                    {
+                                                        using (var text = new StringWriter())
+                                                        {
+                                                            WriteText(groupActivityBlock, ref previous, text);
+                                                            writer.Write(text.ToString());
+                                                        }
+                                                    }
+                                                }
+                                                catch (IOException e)
+                                                {
+                                                    throw e;
+                                                    // Most likely to be the output file already in use
+                                                    // Just keep storing Activities until we can access the file
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -304,9 +365,9 @@ Options: -log LOG     Uses the file LOG as log for the activity
         {
             string[] units = { "", "K", "M", "G", "T", "P", "E", "Z", "Y" };
             int i = 0;
-            while (value > 1500)
+            while (value > 2500)
             {
-                value = value >> 10;
+                value = value / 1000;
                 ++i;
             }
             return value.ToString() + units[i];
@@ -377,7 +438,22 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 }
             }
         }
+        
+        void WriteText(IList<Activity> activities, ref Timestamp previous, StringWriter writer)
+        {
+            foreach (var a in activities)
+            {
+                writer.Write(a.Timestamp - previous);
+                writer.Write(" ");
+                writer.Write(a.Type.Id);
+                writer.Write(" ");
+                writer.Write(a.Info.ToString());
+                writer.WriteLine();
 
+                previous = a.Timestamp;
+            };
+        }
+        
         private Timestamp m_previous;
         private bool WriteText(TextWriter writer)
         {
@@ -386,19 +462,9 @@ Options: -log LOG     Uses the file LOG as log for the activity
             {
                 try
                 {
-                    m_activityList.ForEach((a) =>
-                    {
-                        text.Write(a.Timestamp - previous);
-                        text.Write(" ");
-                        text.Write(a.Type.Id);
-                        text.Write(" ");
-                        text.Write(a.Info.ToString());
-                        text.WriteLine();
-
-                        previous = a.Timestamp;
-                    });
+                    WriteText(m_activityList, ref previous, text);
                 }
-                catch (IOException e)
+                catch (IOException)
                 {
                     return false;
                 }

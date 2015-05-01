@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows.Forms;
+using System.Timers;
 
 namespace living_log_cli
 {
@@ -31,13 +31,33 @@ namespace living_log_cli
                 result = new SyncData() { Timestamp = syncTime, Version = items[1] };
                 return true;
             }
+
+            public static SyncData Now()
+            {
+                return At(DateTime.UtcNow);
+            }
+            public static SyncData At(DateTime t)
+            {
+                return new SyncData() { Timestamp = t, Version = "1" };
+            }
+        }
+
+        public static Activity GetSync(Timestamp t)
+        {
+            return new Activity()
+            {
+                Timestamp = t,
+                Type = Categories.LivingLog_Sync,
+                Info = SyncData.At(t.ToDateTime())
+            };
         }
 
         public LivingLogger(int syncDelay)
         {
             m_sync = new Timer();
+            m_sync.AutoReset = true;
             m_sync.Interval = syncDelay;
-            m_sync.Tick += (s, e) => { Invoke(Categories.LivingLog_Sync, new SyncData() { Timestamp = DateTime.UtcNow, Version = "1" }); };
+            m_sync.Elapsed += (s, e) => { Invoke(Categories.LivingLog_Sync, SyncData.Now()); };
             m_sync.Enabled = false;
         }
 
@@ -55,11 +75,11 @@ namespace living_log_cli
                     m_sync.Enabled = enable;
                     if (enable)
                     {
-                        Invoke(Categories.LivingLog_Startup, new SyncData() { Timestamp = DateTime.UtcNow, Version = "1" });
+                        Invoke(Categories.LivingLog_Startup, SyncData.Now());
                     }
                     else
                     {
-                        Invoke(Categories.LivingLog_Exit, new SyncData() { Timestamp = DateTime.UtcNow, Version = "1" });
+                        Invoke(Categories.LivingLog_Exit, SyncData.Now());
                     }
                 }
             }
