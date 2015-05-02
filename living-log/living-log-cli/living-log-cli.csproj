@@ -66,6 +66,7 @@
     <Compile Include="Activity.cs" />
     <Compile Include="Categories.cs" />
     <Compile Include="Constants.cs" />
+    <Compile Include="EnumerableExt.cs" />
     <Compile Include="KeyboardLogger.cs" />
     <Compile Include="LivingLogger.cs" />
     <Compile Include="Logger.cs" />

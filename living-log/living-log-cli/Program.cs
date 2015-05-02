@@ -12,44 +12,86 @@ using System.Globalization;
 
 namespace living_log_cli
 {
-    public static class EnumerableExt
+    class LivingFile
     {
-        static IList<TSource> ReadBlock<TSource>(IEnumerator<TSource> e, int count)
+        public static bool Exists(string filename)
         {
-            var block = new List<TSource>(count);
-            while ((count > 0) && e.MoveNext())
-            {
-                --count;
-                block.Add(e.Current);
-            }
-            return block;
+            return File.Exists(filename);
         }
 
-        public static IEnumerable<IList<TSource>> ReadBlocks<TSource>(this IEnumerable<TSource> source, int blockSize)
-        {
-            if (source == null) throw new ArgumentNullException("source");
-            if (blockSize < 1) throw new ArgumentOutOfRangeException("blockSize");
+        public string Filename { get; set; }
 
-            IEnumerator<TSource> e = source.GetEnumerator();
-            while (true)
+        public struct Stats
+        {
+            public long Length { get; internal set; }
+            public long Count { get; internal set; }
+        }
+        public static Stats GetStats(string filename)
+        {
+            return new Stats()
             {
-                var block = ReadBlock(e, blockSize);
-                if (block.Count > 0) yield return block;
-                else yield break;
-            }
+                Length = new FileInfo(filename).Length,
+                Count = File.ReadLines(filename).LongCount()
+            };
         }
 
-        public static IEnumerable<TSource> Do<TSource>(this IEnumerable<TSource> source, Action f)
+        public struct Info
         {
-            if (source == null) throw new ArgumentNullException("source");
-            if (f == null) throw new ArgumentNullException("f");
+            public string Name { get; internal set; }
+            
+            public string BaseName { get; internal set; }
+            public string Extension { get; internal set; }
 
-            var e = source.GetEnumerator();
-            while (e.MoveNext())
+            public string Child(int year, int month)
             {
-                f();
-                yield return e.Current;
+                return BaseName
+                    + "."
+                    + year.ToString().PadLeft(4, '0')
+                    + "-"
+                    + month.ToString().PadLeft(2, '0')
+                    + Extension;
             }
+        }
+        public static Info GetInfo(string filename)
+        {
+            var i = filename.LastIndexOf('.');
+            return new Info()
+            {
+                Name = filename,
+                BaseName = (i >= 0) ? filename.Substring(0, i) : filename,
+                Extension = (i >= 0) ? filename.Substring(i) : String.Empty,
+            };
+        }
+
+        public static IEnumerable<Activity> ReadActivities(string filename)
+        {
+            var t = new Timestamp();
+            return File.ReadLines(filename)
+                .Select((s) =>
+                {
+                    Activity act = null;
+                    if (Program.TryParseActivity(s, out act))
+                    {
+                        if (Categories.IsSync(act.Type))
+                        {
+                            var t0 = (act.Info as LivingLogger.SyncData).Timestamp;
+                            t = new Timestamp(t0);
+
+                            act.Timestamp = t;
+                        }
+                        else
+                        {
+                            t = t + act.Timestamp;
+                            act.Timestamp = t;
+                        }
+                    }
+                    return act;
+                })
+                .Where((a) => a != null)
+                .SkipWhile((a) =>
+                {
+                    return !Categories.IsSync(a.Type);
+                });
         }
     }
 
@@ -173,6 +215,148 @@ Options: -log LOG     Uses the file LOG as log for the activity
             Console.SetCursorPosition(pos.x, pos.y);
         }
         
+        void Pause()
+        {
+            if (Enabled)
+            {
+                Enabled = false;
+                Output.WriteLine("Paused");
+            }
+        }
+
+        void Resume()
+        {
+            if (!Enabled)
+            {
+                Enabled = true;
+                Output.WriteLine("Resumed");
+            }
+        }
+
+        void FileStats()
+        {
+            if (LivingFile.Exists(m_filename))
+            {
+                var stats = LivingFile.GetStats(m_filename);
+                Output.WriteLine("File " + m_filename + " has " + ToHumanString(stats.Length) + " bytes");
+                Output.WriteLine("File " + m_filename + " has " + ToHumanString(stats.Count) + " lines");
+            }
+        }
+
+        void FileSplit()
+        {
+            if (Enabled)
+            {
+                Output.WriteLine("Cannot split while logging. Please pause.");
+            }
+            else
+            {
+                if (LivingFile.Exists(m_filename))
+                {
+                    Dump();
+
+                    var info = LivingFile.GetInfo(m_filename);
+                    Output.WriteLine("Files of names " + info.BaseName + ".YYYY-MM" + info.Extension + " will be generated");
+
+                    System.Diagnostics.Stopwatch w = new System.Diagnostics.Stopwatch();
+
+                    long counter = 0;
+                    var logger = new System.Timers.Timer();
+                    logger.AutoReset = true;
+                    logger.Interval = Constants.Second;
+                    logger.Elapsed += (s, e) => { Header("activities: " + ToHumanString(counter).PadRight(8) + " elapsed: " + w.Elapsed.ToString()); };
+                    logger.Start();
+
+                    var backups = new Dictionary<string, string>();
+
+                    try
+                    {
+                        w.Start();
+                        var activities = LivingFile.ReadActivities(m_filename)
+                            .Do(() => ++counter);
+
+                        foreach (var activityBlock in activities.ReadBlocks(Constants.ReadingBlockSize))
+                        {
+                            var groups = activityBlock
+                                .GroupBy((a) =>
+                                {
+                                    var at = a.Timestamp.ToDateTime();
+                                    return new { Year = at.Year, Month = at.Month };
+                                });
+
+                            foreach (var group in groups)
+                            {
+                                if (group.Any())
+                                {
+                                    IEnumerable<Activity> groupActivities;
+                                    var item = group.First();
+                                    if (!Categories.IsSync(item.Type))
+                                    {
+                                        // When appending activities, always start with a sync activity
+                                        // This will help "resorting" activities if needed
+                                        groupActivities = new List<Activity>()
+                                            {
+                                                LivingLogger.GetSync(item.Timestamp)
+                                            }.Concat(group);
+                                    }
+                                    else
+                                    {
+                                        groupActivities = group;
+                                    }
+
+                                    lock (locker)
+                                    {
+                                        var filename = info.Child(group.Key.Year, group.Key.Month);
+
+                                        var backup = filename + ".bak";
+                                        if (!backups.ContainsKey(filename))
+                                        {
+                                            if (File.Exists(filename))
+                                            {
+                                                if (File.Exists(backup)) File.Delete(backup);
+                                                File.Copy(filename, backup);
+                                            }
+                                            backups.Add(filename, backup);
+                                            Output.WriteLine("Writing to " + filename);
+                                        }
+
+                                        using (var writer = new StreamWriter(File.Open(filename, FileMode.Append)))
+                                        {
+                                            Timestamp previous = groupActivities.First().Timestamp;
+                                            foreach (var groupActivityBlock in groupActivities.ReadBlocks(Constants.WritingBlockSize))
+                                            {
+                                                WriteText(groupActivityBlock, ref previous, writer);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Header("Split task successful.");
+                        foreach (var kvp in backups)
+                        {
+                            if (File.Exists(kvp.Value)) File.Delete(kvp.Value);
+                        }
+                        File.Create(m_filename);
+                    }
+                    catch
+                    {
+                        Header("Error during split task. Removing temporary files...");
+                        foreach (var kvp in backups)
+                        {
+                            if (File.Exists(kvp.Key)) File.Delete(kvp.Key);
+                            if (File.Exists(kvp.Value)) File.Move(kvp.Value, kvp.Key);
+                        }
+                    }
+                    finally
+                    {
+                        logger.Stop();
+                    }
+                }
+            }
+        }
+
         private TextReader Input;
         private TextWriter Output;
         void REPL(TextReader input, TextWriter output)
@@ -188,157 +372,26 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 command = (Input.ReadLine() ?? "exit").Trim();
                 if (command.Equals("pause") || command.Equals("p"))
                 {
-                    if (Enabled)
-                    {
-                        Enabled = false;
-                        Output.WriteLine("Paused");
-                    }
+                    Pause();
                 }
                 else if (command.Equals("resume") || command.Equals("r"))
                 {
-                    if (!Enabled)
-                    {
-                        Enabled = true;
-                        Output.WriteLine("Resumed");
-                    }
+                    Resume();
                 }
                 else if (command.Equals("stats"))
                 {
-                    if (File.Exists(m_filename))
-                    {
-                        var info = new FileInfo(m_filename);
-                        Output.WriteLine("File " + info.Name + " has " + ToHumanString(info.Length) + " bytes");
-
-                        var lines = File.ReadLines(m_filename);
-                        Output.WriteLine("File " + info.Name + " has " + ToHumanString(lines.Count()) + " lines");
-                    }
+                    FileStats();
                 }
                 else if (command.Equals("split"))
                 {
-                    if (Enabled)
-                    {
-                        Output.WriteLine("Cannot split while logging. Please pause.");
-                    }
-                    else
-                    {
-                        if (File.Exists(m_filename))
-                        {
-                            var i = m_filename.LastIndexOf('.');
-                            var name = (i >= 0) ? m_filename.Substring(0, i) : m_filename;
-                            var ext = (i >= 0) ? m_filename.Substring(i) : String.Empty;
-                            Output.WriteLine("Files of names " + name + ".YYYY-MM" + ext + " will be generated");
-
-                            Timestamp t = new Timestamp(DateTime.MinValue);
-                            System.Diagnostics.Stopwatch w = new System.Diagnostics.Stopwatch();
-
-                            long counter = 0;
-                            var logger = new System.Timers.Timer();
-                            logger.AutoReset = true;
-                            logger.Interval = Constants.Second;
-                            logger.Elapsed += (s, e) => { Header("activities: " + ToHumanString(counter).PadRight(8) + " elapsed: " + w.Elapsed.ToString()); };
-                            logger.Start();
-
-                            w.Start();
-                            var activities = File.ReadLines(m_filename)
-                                .Select((s) =>
-                                {
-                                    Activity act = null;
-                                    if (TryParseActivity(s, out act))
-                                    {
-                                        if (Categories.IsSync(act.Type))
-                                        {
-                                            var t0 = (act.Info as LivingLogger.SyncData).Timestamp;
-                                            t = new Timestamp(t0);
-
-                                            act.Timestamp = t;
-                                        }
-                                        else
-                                        {
-                                            t = t + act.Timestamp;
-                                            act.Timestamp = t;
-                                        }
-                                    }
-                                    return act;
-                                })
-                                .Where((a) => a != null)
-                                .SkipWhile((a) =>
-                                {
-                                    return !Categories.IsSync(a.Type);
-                                })
-                                .Do(() => ++counter);
-
-                            foreach (var activityBlock in activities.ReadBlocks(Constants.ReadingBlockSize))
-                            {
-                                var groups = activityBlock
-                                    .GroupBy((a) =>
-                                    {
-                                        var at = a.Timestamp.ToDateTime();
-                                        return new { Year = at.Year, Month = at.Month };
-                                    });
-
-                                foreach (var group in groups)
-                                {
-                                    //Output.WriteLine(group.Key.Year.ToString().PadLeft(4, '0') + "-" + group.Key.Month.ToString().PadLeft(2, '0') + " has " + group.Count() + " activities");
-
-                                    if (group.Any())
-                                    {
-                                        IEnumerable<Activity> groupActivities;
-                                        var item = group.First();
-                                        if (!Categories.IsSync(item.Type))
-                                        {
-                                            // When appending activities, always start with a sync activity
-                                            // This will help "resorting" activities if needed
-                                            groupActivities = new List<Activity>()
-                                            {
-                                                LivingLogger.GetSync(item.Timestamp)
-                                            }.Concat(group);
-                                        }
-                                        else
-                                        {
-                                            groupActivities = group;
-                                        }
-
-                                        lock (locker)
-                                        {
-                                            var filename = name + "." + group.Key.Year.ToString() + "-" + group.Key.Month.ToString().PadLeft(2, '0') + ext;
-                                            using (var writer = new StreamWriter(File.Open(filename, FileMode.Append, FileAccess.Write)))
-                                            {
-                                                Output.WriteLine("Writing to " + filename);
-
-                                                Timestamp previous = groupActivities.First().Timestamp;
-                                                try
-                                                {
-                                                    foreach (var groupActivityBlock in groupActivities.ReadBlocks(Constants.WritingBlockSize))
-                                                    {
-                                                        using (var text = new StringWriter())
-                                                        {
-                                                            WriteText(groupActivityBlock, ref previous, text);
-                                                            writer.Write(text.ToString());
-                                                        }
-                                                    }
-                                                }
-                                                catch (IOException e)
-                                                {
-                                                    throw e;
-                                                    // Most likely to be the output file already in use
-                                                    // Just keep storing Activities until we can access the file
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            logger.Stop();
-                        }
-                    }
+                    FileSplit();
                 }
             } while (!command.Equals("exit"));
 
             Program.ForceExit();
         }
 
-        public bool TryParseActivity(string s, out Activity result)
+        public static bool TryParseActivity(string s, out Activity result)
         {
             result = null;
             if (string.IsNullOrWhiteSpace(s)) return false;
@@ -425,12 +478,14 @@ Options: -log LOG     Uses the file LOG as log for the activity
             {
                 try
                 {
-                    using (var writer = new StreamWriter(new FileStream(m_filename, FileMode.Append)))
+                    using (var writer = new StreamWriter(File.Open(m_filename, FileMode.Append)))
                     {
-                        if (WriteText(writer))
-                        {
-                            m_activityList.Clear();
-                        }
+                        // Only change m_previous is writing is successful
+                        Timestamp previous = m_previous;
+                        WriteText(m_activityList, ref previous, writer);
+
+                        m_previous = previous;
+                        m_activityList.Clear();
                     }
                 }
                 catch (IOException e)
@@ -441,41 +496,27 @@ Options: -log LOG     Uses the file LOG as log for the activity
             }
         }
         
-        void WriteText(IList<Activity> activities, ref Timestamp previous, StringWriter writer)
+        void WriteText(IList<Activity> activities, ref Timestamp previous, TextWriter writer)
         {
-            foreach (var a in activities)
+            using (var text = new StringWriter())
             {
-                writer.Write(a.Timestamp - previous);
-                writer.Write(" ");
-                writer.Write(a.Type.Id);
-                writer.Write(" ");
-                writer.Write(a.Info.ToString());
-                writer.WriteLine();
+                foreach (var a in activities)
+                {
+                    text.Write(a.Timestamp - previous);
+                    text.Write(" ");
+                    text.Write(a.Type.Id);
+                    text.Write(" ");
+                    text.Write(a.Info.ToString());
+                    text.WriteLine();
 
-                previous = a.Timestamp;
-            };
+                    previous = a.Timestamp;
+                };
+                
+                writer.Write(text.ToString());
+            }
         }
         
         private Timestamp m_previous;
-        private bool WriteText(TextWriter writer)
-        {
-            Timestamp previous = m_previous;
-            using (var text = new StringWriter())
-            {
-                try
-                {
-                    WriteText(m_activityList, ref previous, text);
-                }
-                catch (IOException)
-                {
-                    return false;
-                }
-
-                writer.Write(text.ToString());
-                m_previous = previous;
-                return true;
-            }
-        }
 
         System.Timers.Timer m_dumpTimer;
         string m_filename;
