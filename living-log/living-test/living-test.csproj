@@ -71,6 +71,7 @@
     <Compile Include="Activities_IsValid.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Activities_Merge.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\living-log-cli\living-log-cli.csproj">

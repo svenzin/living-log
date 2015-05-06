@@ -193,6 +193,7 @@ namespace living_log_cli
                         yield return a.Current;
                         hasA = a.MoveNext();
                     }
+                    else break;
                 }
 
                 var tmp = a; a = b; b = tmp;
