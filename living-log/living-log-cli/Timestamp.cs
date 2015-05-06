@@ -20,11 +20,14 @@ namespace living_log_cli
         public static Timestamp operator -(Timestamp a, Timestamp b) { return new Timestamp(a.Milliseconds - b.Milliseconds); }
 
         public static bool operator <(Timestamp a, Timestamp b) { return a.Milliseconds < b.Milliseconds; }
-        public static bool operator >(Timestamp a, Timestamp b) { return b < a; }
+        public static bool operator >(Timestamp a, Timestamp b) { return a.Milliseconds > b.Milliseconds; }
         
-        public static bool operator <=(Timestamp a, Timestamp b) { return !(a > b); }
-        public static bool operator >=(Timestamp a, Timestamp b) { return !(a < b); }
-        
+        public static bool operator <=(Timestamp a, Timestamp b) { return a.Milliseconds <= b.Milliseconds; }
+        public static bool operator >=(Timestamp a, Timestamp b) { return a.Milliseconds >= b.Milliseconds; }
+
+        public static bool operator ==(Timestamp a, Timestamp b) { return a.Milliseconds == b.Milliseconds; }
+        public static bool operator !=(Timestamp a, Timestamp b) { return a.Milliseconds != b.Milliseconds; }
+
         private Timestamp(long milliseconds) { Milliseconds = milliseconds; }
     }
 }

@@ -6,16 +6,26 @@ using System.Threading.Tasks;
 
 namespace living_log_cli
 {
-    public class Activity
+    public class Activity : IEquatable<Activity>
     {
         public Timestamp Timestamp;
         public Category Type;
         public IData Info;
+
+        public bool Equals(Activity other)
+        {
+            return (Timestamp == other.Timestamp)
+                && (Type == other.Type)
+                && (Info.CompareTo(other.Info) == 0);
+        }
     }
-    
-    public interface IData
+
+    public abstract class IData : IComparable<IData>
     {
-        string ToString();
+        public int CompareTo(IData other)
+        {
+            return ToString().CompareTo(other.ToString());
+        }
     }
 
     public class Category
