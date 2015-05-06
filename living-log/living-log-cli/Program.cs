@@ -233,6 +233,33 @@ namespace living_log_cli
             }
             return queue.Dequeue();
         }
+
+        static IEnumerable<Activity> DuplicateIterator(this IEnumerable<Activity> source)
+        {
+            var items = new Queue<Activity>();
+
+            var t = source.First().Timestamp;
+            
+            var e = source.GetEnumerator();
+            while (e.MoveNext())
+            {
+                if (e.Current.Timestamp != t)
+                {
+                    while (items.Count > 0) yield return items.Dequeue();
+                    t = e.Current.Timestamp;
+                }
+
+                if (!items.Contains(e.Current)) items.Enqueue(e.Current);
+            }
+            while (items.Count > 0) yield return items.Dequeue();
+        }
+        public static IEnumerable<Activity> RemoveDuplicates(IEnumerable<Activity> source)
+        {
+            if (source == null) throw new ArgumentNullException("source");
+            if (source.IsEmpty()) return source;
+
+            return DuplicateIterator(source);
+        }
     }
 
     class Program
