@@ -45,5 +45,10 @@ namespace living_log_cli
                 yield return e.Current;
             }
         }
+
+        public static bool IsEmpty<TSource>(this IEnumerable<TSource> source)
+        {
+            return !source.Any();
+        }
     }
 }

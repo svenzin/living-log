@@ -35,7 +35,7 @@ namespace living_test
             var blocks = list.ReadBlocks(1);
 
             Assert.IsNotNull(blocks);
-            Assert.AreEqual(0, blocks.Count());
+            Assert.IsTrue(blocks.IsEmpty());
         }
 
         [TestMethod]

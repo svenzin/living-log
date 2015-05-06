@@ -146,7 +146,7 @@ namespace living_log_cli
         public static IEnumerable<Activity> WhereChronological(this IEnumerable<Activity> source)
         {
             if (source == null) throw new ArgumentNullException("source");
-            if (!source.Any()) return source;
+            if (source.IsEmpty()) return source;
             var t0 = source.First().Timestamp;
             return source
                 .Where(a => a != null)
@@ -210,8 +210,8 @@ namespace living_log_cli
             if (sourceA == null) throw new ArgumentNullException("sourceA");
             if (sourceB == null) throw new ArgumentNullException("sourceB");
 
-            if (!sourceA.Any()) return sourceB;
-            if (!sourceB.Any()) return sourceA;
+            if (sourceA.IsEmpty()) return sourceB;
+            if (sourceB.IsEmpty()) return sourceA;
 
             return MergeIterator(sourceA.GetEnumerator(), sourceB.GetEnumerator());
         }
@@ -219,7 +219,7 @@ namespace living_log_cli
         public static IEnumerable<Activity> Merge(IEnumerable<IEnumerable<Activity>> sources)
         {
             if (sources == null) throw new ArgumentNullException("sources");
-            if (!sources.Any()) return new List<Activity>();
+            if (sources.IsEmpty()) return Enumerable.Empty<Activity>();
 
             var queue = new Queue<IEnumerable<Activity>>();
             foreach (var s in sources) queue.Enqueue(s);
