@@ -68,7 +68,7 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
-    <Compile Include="Activities.cs" />
+    <Compile Include="Activities_IsValid.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
