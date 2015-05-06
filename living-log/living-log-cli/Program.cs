@@ -87,11 +87,150 @@ namespace living_log_cli
                     }
                     return act;
                 })
-                .Where((a) => a != null)
-                .SkipWhile((a) =>
+                .WhereValid();
+        }
+    }
+
+    public static class ActivityTools
+    {
+        // A valid activity list
+        // - is non-null
+        // - has non-null items
+        // - starts with a sync information
+        public static bool IsValid(IEnumerable<Activity> source)
+        {
+            if (source == null) throw new ArgumentNullException("source");
+
+            if (source.Any())
+            {
+                var item = source.First();
+                if (item == null) return false;
+                if (!Categories.IsSync(item.Type)) return false;
+
+                var t0 = item.Timestamp;
+                foreach (var a in source.Skip(1))
                 {
-                    return !Categories.IsSync(a.Type);
+                    if (a == null) return false;
+                }
+            }
+
+            return true;
+        }
+
+        public static bool IsChronological(IEnumerable<Activity> source)
+        {
+            if (source == null) throw new ArgumentNullException("source");
+
+            if (source.Any())
+            {
+                var t0 = source.First().Timestamp;
+                foreach (var a in source.Skip(1))
+                {
+                    var t = t0;
+                    t0 = a.Timestamp;
+                    if (t0 < t) return false;
+                }
+            }
+
+            return true;
+        }
+
+        public static IEnumerable<Activity> WhereValid(this IEnumerable<Activity> source)
+        {
+            if (source == null) throw new ArgumentNullException("source");
+            return source
+                .Where(a => a != null)
+                .SkipWhile(a => !Categories.IsSync(a.Type));
+        }
+
+        public static IEnumerable<Activity> WhereChronological(this IEnumerable<Activity> source)
+        {
+            if (source == null) throw new ArgumentNullException("source");
+            if (!source.Any()) return source;
+            var t0 = source.First().Timestamp;
+            return source
+                .Where(a => a != null)
+                .TakeWhile(a =>
+                {
+                    var t = t0;
+                    t0 = a.Timestamp;
+                    return t <= t0;
                 });
+        }
+
+        public static IEnumerable<Activity> MakeValid(this IEnumerable<Activity> source)
+        {
+            if (source == null) throw new ArgumentNullException("source");
+
+            // Non-null
+            var activities = source.Where((a) => a != null);
+
+            // Synced
+            if (activities.Any())
+            {
+                var item = activities.First();
+                if (!Categories.IsSync(item.Type))
+                {
+                    activities = new List<Activity>() { LivingLogger.GetSync(item.Timestamp) }.Concat(activities);
+                }
+            }
+
+            return activities.ToList();
+        }
+
+        static IEnumerable<Activity> MergeIterator(IEnumerator<Activity> a, IEnumerator<Activity> b)
+        {
+            bool hasA = a.MoveNext();
+            bool hasB = b.MoveNext();
+
+            while (hasB)
+            {
+                var t = b.Current.Timestamp;
+                while (hasA)
+                {
+                    if (a.Current.Timestamp <= t)
+                    {
+                        yield return a.Current;
+                        hasA = a.MoveNext();
+                    }
+                }
+
+                var tmp = a; a = b; b = tmp;
+                var hasTmp = hasA; hasA = hasB; hasB = hasTmp;
+            }
+
+            while (hasA)
+            {
+                yield return a.Current;
+                hasA = a.MoveNext();
+            }
+        }
+        public static IEnumerable<Activity> Merge(IEnumerable<Activity> sourceA, IEnumerable<Activity> sourceB)
+        {
+            if (sourceA == null) throw new ArgumentNullException("sourceA");
+            if (sourceB == null) throw new ArgumentNullException("sourceB");
+
+            if (!sourceA.Any()) return sourceB;
+            if (!sourceB.Any()) return sourceA;
+
+            return MergeIterator(sourceA.GetEnumerator(), sourceB.GetEnumerator());
+        }
+
+        public static IEnumerable<Activity> Merge(IEnumerable<IEnumerable<Activity>> sources)
+        {
+            if (sources == null) throw new ArgumentNullException("sources");
+            if (!sources.Any()) return new List<Activity>();
+
+            var queue = new Queue<IEnumerable<Activity>>();
+            foreach (var s in sources) queue.Enqueue(s);
+
+            while (queue.Count > 1)
+            {
+                var a = queue.Dequeue();
+                var b = queue.Dequeue();
+                queue.Enqueue(Merge(a, b));
+            }
+            return queue.Dequeue();
         }
     }
 
@@ -320,9 +459,9 @@ Options: -log LOG     Uses the file LOG as log for the activity
                                             Output.WriteLine("Writing to " + filename);
                                         }
 
+                                        Timestamp previous = groupActivities.First().Timestamp;
                                         using (var writer = new StreamWriter(File.Open(filename, FileMode.Append)))
                                         {
-                                            Timestamp previous = groupActivities.First().Timestamp;
                                             foreach (var groupActivityBlock in groupActivities.ReadBlocks(Constants.WritingBlockSize))
                                             {
                                                 WriteText(groupActivityBlock, ref previous, writer);
@@ -478,15 +617,14 @@ Options: -log LOG     Uses the file LOG as log for the activity
             {
                 try
                 {
+                    Timestamp previous = m_previous;
                     using (var writer = new StreamWriter(File.Open(m_filename, FileMode.Append)))
                     {
                         // Only change m_previous is writing is successful
-                        Timestamp previous = m_previous;
                         WriteText(m_activityList, ref previous, writer);
-
-                        m_previous = previous;
-                        m_activityList.Clear();
                     }
+                    m_previous = previous;
+                    m_activityList.Clear();
                 }
                 catch (IOException e)
                 {

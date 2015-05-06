@@ -51,6 +51,10 @@ namespace living_log_cli
                 Info = SyncData.At(t.ToDateTime())
             };
         }
+        public static Activity GetSync()
+        {
+            return GetSync(new Timestamp(DateTime.UtcNow));
+        }
 
         public LivingLogger(int syncDelay)
         {

@@ -13,6 +13,8 @@ namespace living_log_cli
             return (c == LivingLog_Startup) || (c == LivingLog_Sync);
         }
 
+        public static Category Unknown = new Category() { Id = -1, Name = "Unknown" };
+        
         public static Category LivingLog_Startup = new Category() { Id = 0, Name = "LivingLog_Startup" };
         public static Category LivingLog_Sync = new Category() { Id = 10, Name = "LivingLog_Sync" };
         public static Category LivingLog_Exit = new Category() { Id = 11, Name = "LivingLog_Exit" };
