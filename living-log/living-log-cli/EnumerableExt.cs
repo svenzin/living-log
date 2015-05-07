@@ -8,41 +8,32 @@ namespace living_log_cli
 {
     public static class EnumerableExt
     {
-        static IList<TSource> ReadBlock<TSource>(IEnumerator<TSource> e, int count)
-        {
-            var block = new List<TSource>(count);
-            while ((count > 0) && e.MoveNext())
-            {
-                --count;
-                block.Add(e.Current);
-            }
-            return block;
-        }
-
-        public static IEnumerable<IList<TSource>> ReadBlocks<TSource>(this IEnumerable<TSource> source, int blockSize)
+        public static IEnumerable<IList<TSource>> PartitionBlocks<TSource>(this IEnumerable<TSource> source, int blockSize)
         {
             if (source == null) throw new ArgumentNullException("source");
             if (blockSize < 1) throw new ArgumentOutOfRangeException("blockSize");
 
-            IEnumerator<TSource> e = source.GetEnumerator();
-            while (true)
+            var block = new List<TSource>();
+            foreach (var x in source)
             {
-                var block = ReadBlock(e, blockSize);
-                if (block.Count > 0) yield return block;
-                else yield break;
+                block.Add(x);
+                if (block.Count == blockSize) {
+                    yield return block;
+                    block = new List<TSource>();
+                }
             }
+            if (block.Count > 0) yield return block;
         }
 
         public static IEnumerable<TSource> Do<TSource>(this IEnumerable<TSource> source, Action f)
         {
             if (source == null) throw new ArgumentNullException("source");
             if (f == null) throw new ArgumentNullException("f");
-
-            var e = source.GetEnumerator();
-            while (e.MoveNext())
+            
+            foreach (var x in source)
             {
                 f();
-                yield return e.Current;
+                yield return x;
             }
         }
 

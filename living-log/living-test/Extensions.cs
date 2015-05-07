@@ -15,7 +15,7 @@ namespace living_test
         {
             List<int> list = null;
 
-            list.ReadBlocks(1).ToList();
+            list.PartitionBlocks(1).ToList();
         }
 
         [TestMethod]
@@ -24,7 +24,7 @@ namespace living_test
         {
             List<int> list = new List<int>();
 
-            list.ReadBlocks(0).ToList();
+            list.PartitionBlocks(0).ToList();
         }
 
         [TestMethod]
@@ -32,7 +32,7 @@ namespace living_test
         {
             List<int> list = new List<int>();
 
-            var blocks = list.ReadBlocks(1);
+            var blocks = list.PartitionBlocks(1);
 
             Assert.IsNotNull(blocks);
             Assert.IsTrue(blocks.IsEmpty());
@@ -43,7 +43,7 @@ namespace living_test
         {
             var items = Enumerable.Range(0, 5);
 
-            var blocks = items.ReadBlocks(10);
+            var blocks = items.PartitionBlocks(10);
 
             Assert.IsNotNull(blocks);
             Assert.AreEqual(1, blocks.Count());
@@ -55,7 +55,7 @@ namespace living_test
         {
             var items = Enumerable.Range(0, 10);
 
-            var blocks = items.ReadBlocks(10);
+            var blocks = items.PartitionBlocks(10);
 
             Assert.IsNotNull(blocks);
             Assert.AreEqual(1, blocks.Count());
@@ -67,7 +67,7 @@ namespace living_test
         {
             var items = Enumerable.Range(0, 25);
 
-            var blocks = items.ReadBlocks(10);
+            var blocks = items.PartitionBlocks(10);
 
             Assert.IsNotNull(blocks);
             Assert.AreEqual(3, blocks.Count());
@@ -81,7 +81,7 @@ namespace living_test
         {
             var items = Enumerable.Range(0, 30);
 
-            var blocks = items.ReadBlocks(10);
+            var blocks = items.PartitionBlocks(10);
 
             Assert.IsNotNull(blocks);
             Assert.AreEqual(3, blocks.Count());

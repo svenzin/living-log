@@ -239,17 +239,16 @@ namespace living_log_cli
             var items = new Queue<Activity>();
 
             var t = source.First().Timestamp;
-            
-            var e = source.GetEnumerator();
-            while (e.MoveNext())
+
+            foreach (var a in source)
             {
-                if (e.Current.Timestamp != t)
+                if (a.Timestamp != t)
                 {
                     while (items.Count > 0) yield return items.Dequeue();
-                    t = e.Current.Timestamp;
+                    t = a.Timestamp;
                 }
 
-                if (!items.Contains(e.Current)) items.Enqueue(e.Current);
+                if (!items.Contains(a)) items.Enqueue(a);
             }
             while (items.Count > 0) yield return items.Dequeue();
         }
@@ -259,6 +258,22 @@ namespace living_log_cli
             if (source.IsEmpty()) return source;
 
             return DuplicateIterator(source);
+        }
+
+        public static IEnumerable<IList<Activity>> PartitionChronological(IEnumerable<Activity> source)
+        {
+            if (source == null) throw new ArgumentNullException("source");
+            if (source.IsEmpty()) yield break;
+
+            var t = source.First().Timestamp;
+            var items = new List<Activity>();
+            foreach (var a in source)
+            {
+                if (a.Timestamp < t) { yield return items; items = new List<Activity>(); }
+                items.Add(a);
+                t = a.Timestamp;
+            }
+            if (items.Count > 0) yield return items;
         }
     }
 
@@ -442,7 +457,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                         var activities = LivingFile.ReadActivities(m_filename)
                             .Do(() => ++counter);
 
-                        foreach (var activityBlock in activities.ReadBlocks(Constants.ReadingBlockSize))
+                        foreach (var activityBlock in activities.PartitionBlocks(Constants.ReadingBlockSize))
                         {
                             var groups = activityBlock
                                 .GroupBy((a) =>
@@ -490,7 +505,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                                         Timestamp previous = groupActivities.First().Timestamp;
                                         using (var writer = new StreamWriter(File.Open(filename, FileMode.Append)))
                                         {
-                                            foreach (var groupActivityBlock in groupActivities.ReadBlocks(Constants.WritingBlockSize))
+                                            foreach (var groupActivityBlock in groupActivities.PartitionBlocks(Constants.WritingBlockSize))
                                             {
                                                 WriteText(groupActivityBlock, ref previous, writer);
                                             }
