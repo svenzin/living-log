@@ -66,7 +66,7 @@ namespace living_test
             activities.Add(new Activity()
             {
                 Timestamp = new Timestamp(t1),
-                Type = Categories.Unknown,
+                Type = Category.Unknown,
             });
 
             Assert.IsFalse(ActivityTools.IsValid(activities));

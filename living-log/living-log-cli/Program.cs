@@ -71,7 +71,7 @@ namespace living_log_cli
                 .Select((s) =>
                 {
                     Activity act = null;
-                    if (Program.TryParseActivity(s, out act))
+                    if (Activity.TryParse(s, out act))
                     {
                         if (Categories.IsSync(act.Type))
                         {
@@ -635,31 +635,6 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
             Program.ForceExit();
         }
-
-        public static bool TryParseActivity(string s, out Activity result)
-        {
-            result = null;
-            if (string.IsNullOrWhiteSpace(s)) return false;
-
-            var items = s.Split(new char[] { ' ' }, 3);
-            if (items.Length != 3) return false;
-
-            var dT = new Timestamp();
-            if (!long.TryParse(items[0], out dT.Milliseconds)) return false;
-
-            int type;
-            if (!int.TryParse(items[1], out type)) return false;
-
-            Category cat = Categories.get(type);
-            if (cat == null) return false;
-            
-            IData data;
-            if (!Categories.parser(cat)(items[2], out data)) return false;
-           
-            result = new Activity() { Timestamp = dT, Type = cat, Info = data };
-            return true;
-        }
-
 
         public static string ToHumanString(long value)
         {

@@ -13,25 +13,22 @@ namespace living_log_cli
             return (c == LivingLog_Startup) || (c == LivingLog_Sync);
         }
 
-        public static Category Unknown = new Category() { Id = -1, Name = "Unknown" };
-        
-        public static Category LivingLog_Startup = new Category() { Id = 0, Name = "LivingLog_Startup" };
-        public static Category LivingLog_Sync = new Category() { Id = 10, Name = "LivingLog_Sync" };
-        public static Category LivingLog_Exit = new Category() { Id = 11, Name = "LivingLog_Exit" };
+        public static readonly Category LivingLog_Startup = new Category() { Id =  0, Name = "LivingLog_Startup" };
+        public static readonly Category LivingLog_Sync    = new Category() { Id = 10, Name = "LivingLog_Sync"    };
+        public static readonly Category LivingLog_Exit    = new Category() { Id = 11, Name = "LivingLog_Exit"    };
 
-        public static Category Mouse_Move = new Category() { Id = 1, Name = "Mouse_Move" };
-        public static Category Mouse_Down = new Category() { Id = 2, Name = "Mouse_Down" };
-        public static Category Mouse_Up = new Category() { Id = 3, Name = "Mouse_Up" };
-        public static Category Mouse_Click = new Category() { Id = 4, Name = "Mouse_Click" };
-        public static Category Mouse_DoubleClick = new Category() { Id = 5, Name = "Mouse_DoubleClick" };
-        public static Category Mouse_Wheel = new Category() { Id = 6, Name = "Mouse_Wheel" };
+        public static readonly Category Mouse_Move        = new Category() { Id = 1, Name = "Mouse_Move"        };
+        public static readonly Category Mouse_Down        = new Category() { Id = 2, Name = "Mouse_Down"        };
+        public static readonly Category Mouse_Up          = new Category() { Id = 3, Name = "Mouse_Up"          };
+        public static readonly Category Mouse_Click       = new Category() { Id = 4, Name = "Mouse_Click"       };
+        public static readonly Category Mouse_DoubleClick = new Category() { Id = 5, Name = "Mouse_DoubleClick" };
+        public static readonly Category Mouse_Wheel       = new Category() { Id = 6, Name = "Mouse_Wheel"       };
 
-        public static Category Keyboard_KeyDown = new Category() { Id = 7, Name = "Keyboard_KeyDown" };
-        public static Category Keyboard_KeyUp = new Category() { Id = 8, Name = "Keyboard_KeyUp" };
-        public static Category Keyboard_KeyPress = new Category() { Id = 9, Name = "Keyboard_KeyPress" };
+        public static readonly Category Keyboard_KeyDown  = new Category() { Id = 7, Name = "Keyboard_KeyDown"  };
+        public static readonly Category Keyboard_KeyUp    = new Category() { Id = 8, Name = "Keyboard_KeyUp"    };
+        public static readonly Category Keyboard_KeyPress = new Category() { Id = 9, Name = "Keyboard_KeyPress" };
 
         private static Dictionary<int, Category> categories;
-        private static Dictionary<Category, TryParseIData> parsers;
 
         static Categories()
         {
@@ -51,23 +48,20 @@ namespace living_log_cli
                 { Keyboard_KeyPress.Id , Keyboard_KeyPress },
             };
 
-            parsers = new Dictionary<Category, TryParseIData>()
-            {
-                { LivingLog_Startup , LivingLogger.SyncData.TryParse },
-                { LivingLog_Sync    , LivingLogger.SyncData.TryParse },
-                { LivingLog_Exit    , LivingLogger.SyncData.TryParse },
-                                                           
-                { Mouse_Move        , MouseLogger.MouseMoveData.TryParse   },
-                { Mouse_Down        , MouseLogger.MouseButtonData.TryParse },
-                { Mouse_Up          , MouseLogger.MouseButtonData.TryParse },
-                { Mouse_Click       , MouseLogger.MouseButtonData.TryParse },
-                { Mouse_DoubleClick , MouseLogger.MouseButtonData.TryParse },
-                { Mouse_Wheel       , MouseLogger.MouseWheelData.TryParse  },
-                                                           
-                { Keyboard_KeyDown  , KeyboardLogger.KeyboardKeyData.TryParse   },
-                { Keyboard_KeyUp    , KeyboardLogger.KeyboardKeyData.TryParse   },
-                { Keyboard_KeyPress , KeyboardLogger.KeyboardPressData.TryParse },
-            };
+            Activity.SetParser(LivingLog_Startup, LivingLogger.SyncData.TryParse);
+            Activity.SetParser(LivingLog_Sync,    LivingLogger.SyncData.TryParse);
+            Activity.SetParser(LivingLog_Exit,    LivingLogger.SyncData.TryParse);
+
+            Activity.SetParser(Mouse_Move,        MouseLogger.MouseMoveData.TryParse);
+            Activity.SetParser(Mouse_Down,        MouseLogger.MouseButtonData.TryParse);
+            Activity.SetParser(Mouse_Up,          MouseLogger.MouseButtonData.TryParse);
+            Activity.SetParser(Mouse_Click,       MouseLogger.MouseButtonData.TryParse);
+            Activity.SetParser(Mouse_DoubleClick, MouseLogger.MouseButtonData.TryParse);
+            Activity.SetParser(Mouse_Wheel,       MouseLogger.MouseWheelData.TryParse);
+
+            Activity.SetParser(Keyboard_KeyDown,  KeyboardLogger.KeyboardKeyData.TryParse);
+            Activity.SetParser(Keyboard_KeyUp,    KeyboardLogger.KeyboardKeyData.TryParse);
+            Activity.SetParser(Keyboard_KeyPress, KeyboardLogger.KeyboardPressData.TryParse);
         }
 
         public static Category get(int id)
@@ -75,16 +69,6 @@ namespace living_log_cli
             Category result;
             if (!categories.TryGetValue(id, out result)) return null;
             return result;
-        }
-
-        public delegate bool TryParseIData(string s, out IData result);
-
-        public static bool NullParser(string s, out IData result) { result = null; return false; }
-        public static TryParseIData parser(Category c)
-        {
-            TryParseIData parser;
-            if (!parsers.TryGetValue(c, out parser)) parser = NullParser;    
-            return parser;
         }
     }
 }
