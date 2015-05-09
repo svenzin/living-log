@@ -9,6 +9,7 @@ using System.Drawing;
 using System.IO;
 using System.Threading;
 using System.Globalization;
+using System.Diagnostics;
 
 namespace living_log_cli
 {
@@ -93,6 +94,32 @@ namespace living_log_cli
 
     public static class ActivityTools
     {
+        public static IEnumerable<Activity> Process(IEnumerable<Activity> source)
+        {
+            //var w = new Stopwatch();
+            //w.Start();
+
+            //var t0 = w.Elapsed;
+            //var list = source.ToList();
+            //var tList = w.Elapsed;
+            //var valid = WhereValid(list).ToList();
+            //var tValid = w.Elapsed;
+            //var parts = PartitionChronological(valid).ToList();
+            //var tParts = w.Elapsed;
+            //var merge = Merge(parts).ToList();
+            //var tMerge = w.Elapsed;
+            //var dupe = RemoveDuplicates(merge).ToList();
+            //var tDupe = w.Elapsed;
+            //w.Stop();
+            //return dupe;
+            return RemoveDuplicates(
+                Merge(
+                PartitionChronological(
+                WhereValid(
+                    source
+                    ))));
+        }
+
         // A valid activity list
         // - is non-null
         // - has non-null items
@@ -387,12 +414,15 @@ Options: -log LOG     Uses the file LOG as log for the activity
             System.Windows.Forms.Application.Exit();
         }
 
+        private string status = string.Empty;
+        private void Header() { Header(status); }
         private void Header(string message)
         {
+            status = message;
             var pos = new { x = Console.CursorLeft, y = Console.CursorTop };
             Console.SetCursorPosition(Console.WindowLeft, Console.WindowTop);
             Console.WriteLine(("Using " + Constants.LogFilename + " as log file").PadRight(Console.BufferWidth - 1));
-            Console.WriteLine(message.PadRight(Console.BufferWidth - 1));
+            Console.WriteLine(status.PadRight(Console.BufferWidth - 1));
             Console.WriteLine(string.Empty.PadRight(Console.BufferWidth - 1));
             Console.SetCursorPosition(pos.x, pos.y);
         }
@@ -518,11 +548,39 @@ Options: -log LOG     Uses the file LOG as log for the activity
                         Header("Split task successful.");
                         foreach (var kvp in backups)
                         {
+                            counter = 0;
+                            w.Restart();
+                            Output.WriteLine("Processing " + kvp.Key);
+                            
+                            if (File.Exists(kvp.Value)) File.Delete(kvp.Value);
+                            if (File.Exists(kvp.Key)) File.Copy(kvp.Key, kvp.Value);
+
+                            var processed =
+                                ActivityTools.Process(
+                                    LivingFile
+                                    .ReadActivities(kvp.Value)
+                                    .Do(() => ++counter)
+                                );
+                            Timestamp previous = processed.First().Timestamp;
+                            using (var writer = new StreamWriter(File.Create(kvp.Key)))
+                            {
+                                foreach (var pBlock in processed.PartitionBlocks(Constants.WritingBlockSize))
+                                {
+                                    WriteText(pBlock, ref previous, writer);
+                                }
+                            }
+                        }
+                        foreach (var kvp in backups)
+                        {
                             if (File.Exists(kvp.Value)) File.Delete(kvp.Value);
                         }
-                        File.Create(m_filename);
+                        using (var file = File.Create(m_filename))
+                        {
+                            // "using" makes sura that the file is properly closed and not still in use
+                        }
+                        Header("Processing task successful.");
                     }
-                    catch
+                    catch (Exception e)
                     {
                         Header("Error during split task. Removing temporary files...");
                         foreach (var kvp in backups)
@@ -549,7 +607,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
             string command = string.Empty;
             do
             {
-                Header(string.Empty);
+                Header();
                 Output.Write("ll > ");
                 command = (Input.ReadLine() ?? "exit").Trim();
                 if (command.Equals("pause") || command.Equals("p"))
@@ -567,6 +625,11 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 else if (command.Equals("split"))
                 {
                     FileSplit();
+                }
+                else if (command.Equals("test"))
+                {
+                    var activities = LivingFile.ReadActivities("C:\\Users\\scorder\\Documents\\living-log.2015-04.log");
+                    ActivityTools.Process(activities);
                 }
             } while (!command.Equals("exit"));
 
@@ -602,12 +665,20 @@ Options: -log LOG     Uses the file LOG as log for the activity
         {
             string[] units = { "", "K", "M", "G", "T", "P", "E", "Z", "Y" };
             int i = 0;
-            while (value > 2500)
+            while (value >= 1000000)
             {
                 value = value / 1000;
                 ++i;
             }
-            return value.ToString() + units[i];
+            double d = value;
+            if (d >= 1000)
+            {
+                d = d / 1000;
+                ++i;
+            }
+            if (d >= 100) return d.ToString("F1") + units[i];
+            else if (d >= 10) return d.ToString("F2") + units[i];
+            return d.ToString("F3") + units[i];
         }
         
         Program(string filename)
@@ -671,6 +742,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 }
                 catch (IOException e)
                 {
+                    Header("Could not write to living log");
                     // Most likely to be the output file already in use
                     // Just keep storing Activities until we can access the file
                 }
