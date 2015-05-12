@@ -68,6 +68,7 @@
     <Compile Include="Constants.cs" />
     <Compile Include="EnumerableExt.cs" />
     <Compile Include="KeyboardLogger.cs" />
+    <Compile Include="LivingFile.cs" />
     <Compile Include="LivingLogger.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="MouseLogger.cs" />

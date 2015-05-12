@@ -13,84 +13,7 @@ using System.Diagnostics;
 
 namespace living_log_cli
 {
-    class LivingFile
-    {
-        public static bool Exists(string filename)
-        {
-            return File.Exists(filename);
-        }
-
-        public string Filename { get; set; }
-
-        public struct Stats
-        {
-            public long Length { get; internal set; }
-            public long Count { get; internal set; }
-        }
-        public static Stats GetStats(string filename)
-        {
-            return new Stats()
-            {
-                Length = new FileInfo(filename).Length,
-                Count = File.ReadLines(filename).LongCount()
-            };
-        }
-
-        public struct Info
-        {
-            public string Name { get; internal set; }
-            
-            public string BaseName { get; internal set; }
-            public string Extension { get; internal set; }
-
-            public string Child(int year, int month)
-            {
-                return BaseName
-                    + "."
-                    + year.ToString().PadLeft(4, '0')
-                    + "-"
-                    + month.ToString().PadLeft(2, '0')
-                    + Extension;
-            }
-        }
-        public static Info GetInfo(string filename)
-        {
-            var i = filename.LastIndexOf('.');
-            return new Info()
-            {
-                Name = filename,
-                BaseName = (i >= 0) ? filename.Substring(0, i) : filename,
-                Extension = (i >= 0) ? filename.Substring(i) : String.Empty,
-            };
-        }
-
-        public static IEnumerable<Activity> ReadActivities(string filename)
-        {
-            var t = new Timestamp();
-            return File.ReadLines(filename)
-                .Select((s) =>
-                {
-                    Activity act = null;
-                    if (Activity.TryParse(s, out act))
-                    {
-                        if (Categories.IsSync(act.Type))
-                        {
-                            var t0 = (act.Info as LivingLogger.SyncData).Timestamp;
-                            t = new Timestamp(t0);
-
-                            act.Timestamp = t;
-                        }
-                        else
-                        {
-                            t = t + act.Timestamp;
-                            act.Timestamp = t;
-                        }
-                    }
-                    return act;
-                })
-                .WhereValid();
-        }
-    }
+    
 
     public static class ActivityTools
     {
@@ -124,7 +47,7 @@ namespace living_log_cli
         // - is non-null
         // - has non-null items
         // - starts with a sync information
-        public static bool IsValid(IEnumerable<Activity> source)
+        public static bool IsValid(ICollection<Activity> source)
         {
             if (source == null) throw new ArgumentNullException("source");
 
@@ -144,7 +67,7 @@ namespace living_log_cli
             return true;
         }
 
-        public static bool IsChronological(IEnumerable<Activity> source)
+        public static bool IsChronological(ICollection<Activity> source)
         {
             if (source == null) throw new ArgumentNullException("source");
 
@@ -205,6 +128,7 @@ namespace living_log_cli
             return activities.ToList();
         }
 
+        static void Swap<T>(ref T a, ref T b) { var t = a; a = b; b = t; }
         static IEnumerable<Activity> MergeIterator(IEnumerator<Activity> a, IEnumerator<Activity> b)
         {
             bool hasA = a.MoveNext();
@@ -223,8 +147,8 @@ namespace living_log_cli
                     else break;
                 }
 
-                var tmp = a; a = b; b = tmp;
-                var hasTmp = hasA; hasA = hasB; hasB = hasTmp;
+                Swap(ref a, ref b);
+                Swap(ref hasA, ref hasB);
             }
 
             while (hasA)
@@ -249,8 +173,7 @@ namespace living_log_cli
             if (sources == null) throw new ArgumentNullException("sources");
             if (sources.IsEmpty()) return Enumerable.Empty<Activity>();
 
-            var queue = new Queue<IEnumerable<Activity>>();
-            foreach (var s in sources) queue.Enqueue(s);
+            var queue = new Queue<IEnumerable<Activity>>(sources);
 
             while (queue.Count > 1)
             {
@@ -400,7 +323,8 @@ Options: -log LOG     Uses the file LOG as log for the activity
             });
 
             Console.SetCursorPosition(0, 4);
-            new Thread(() => { p.REPL(Console.In, Console.Out); }) { IsBackground = true }.Start();
+            UI ui = new UI() { Input = Console.In, Output = Console.Out };
+            new Thread(() => { p.REPL(ui); }) { IsBackground = true }.Start();
             System.Windows.Forms.Application.Run();
 
             //new Thread(() => { System.Windows.Forms.Application.Run(); }) { IsBackground = true }.Start();
@@ -414,25 +338,12 @@ Options: -log LOG     Uses the file LOG as log for the activity
             System.Windows.Forms.Application.Exit();
         }
 
-        private string status = string.Empty;
-        private void Header() { Header(status); }
-        private void Header(string message)
-        {
-            status = message;
-            var pos = new { x = Console.CursorLeft, y = Console.CursorTop };
-            Console.SetCursorPosition(Console.WindowLeft, Console.WindowTop);
-            Console.WriteLine(("Using " + Constants.LogFilename + " as log file").PadRight(Console.BufferWidth - 1));
-            Console.WriteLine(status.PadRight(Console.BufferWidth - 1));
-            Console.WriteLine(string.Empty.PadRight(Console.BufferWidth - 1));
-            Console.SetCursorPosition(pos.x, pos.y);
-        }
-        
         void Pause()
         {
             if (Enabled)
             {
                 Enabled = false;
-                Output.WriteLine("Paused");
+                Ui.Output.WriteLine("Paused");
             }
         }
 
@@ -441,7 +352,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
             if (!Enabled)
             {
                 Enabled = true;
-                Output.WriteLine("Resumed");
+                Ui.Output.WriteLine("Resumed");
             }
         }
 
@@ -450,8 +361,8 @@ Options: -log LOG     Uses the file LOG as log for the activity
             if (LivingFile.Exists(m_filename))
             {
                 var stats = LivingFile.GetStats(m_filename);
-                Output.WriteLine("File " + m_filename + " has " + ToHumanString(stats.Length) + " bytes");
-                Output.WriteLine("File " + m_filename + " has " + ToHumanString(stats.Count) + " lines");
+                Ui.Output.WriteLine("File " + m_filename + " has " + ToHumanString(stats.Length) + " bytes");
+                Ui.Output.WriteLine("File " + m_filename + " has " + ToHumanString(stats.Count) + " lines");
             }
         }
 
@@ -459,7 +370,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
         {
             if (Enabled)
             {
-                Output.WriteLine("Cannot split while logging. Please pause.");
+                Ui.Output.WriteLine("Cannot split while logging. Please pause.");
             }
             else
             {
@@ -468,7 +379,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                     Dump();
 
                     var info = LivingFile.GetInfo(m_filename);
-                    Output.WriteLine("Files of names " + info.BaseName + ".YYYY-MM" + info.Extension + " will be generated");
+                    Ui.Output.WriteLine("Files of names " + info.BaseName + ".YYYY-MM" + info.Extension + " will be generated");
 
                     System.Diagnostics.Stopwatch w = new System.Diagnostics.Stopwatch();
 
@@ -476,7 +387,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                     var logger = new System.Timers.Timer();
                     logger.AutoReset = true;
                     logger.Interval = Constants.Second;
-                    logger.Elapsed += (s, e) => { Header("activities: " + ToHumanString(counter).PadRight(8) + " elapsed: " + w.Elapsed.ToString()); };
+                    logger.Elapsed += (s, e) => { Ui.Header("activities: " + ToHumanString(counter).PadRight(8) + " elapsed: " + w.Elapsed.ToString()); };
                     logger.Start();
 
                     var backups = new Dictionary<string, string>();
@@ -506,10 +417,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                                     {
                                         // When appending activities, always start with a sync activity
                                         // This will help "resorting" activities if needed
-                                        groupActivities = new List<Activity>()
-                                            {
-                                                LivingLogger.GetSync(item.Timestamp)
-                                            }.Concat(group);
+                                        groupActivities = Enumerable.Repeat(LivingLogger.GetSync(item.Timestamp), 1).Concat(group);
                                     }
                                     else
                                     {
@@ -529,7 +437,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                                                 File.Copy(filename, backup);
                                             }
                                             backups.Add(filename, backup);
-                                            Output.WriteLine("Writing to " + filename);
+                                            Ui.Output.WriteLine("Writing to " + filename);
                                         }
 
                                         Timestamp previous = groupActivities.First().Timestamp;
@@ -545,12 +453,12 @@ Options: -log LOG     Uses the file LOG as log for the activity
                             }
                         }
 
-                        Header("Split task successful.");
+                        Ui.Header("Split task successful.");
                         foreach (var kvp in backups)
                         {
                             counter = 0;
                             w.Restart();
-                            Output.WriteLine("Processing " + kvp.Key);
+                            Ui.Output.WriteLine("Processing " + kvp.Key);
                             
                             if (File.Exists(kvp.Value)) File.Delete(kvp.Value);
                             if (File.Exists(kvp.Key)) File.Copy(kvp.Key, kvp.Value);
@@ -578,11 +486,11 @@ Options: -log LOG     Uses the file LOG as log for the activity
                         {
                             // "using" makes sura that the file is properly closed and not still in use
                         }
-                        Header("Processing task successful.");
+                        Ui.Header("Processing task successful.");
                     }
                     catch (Exception e)
                     {
-                        Header("Error during split task. Removing temporary files...");
+                        Ui.Header("Error during split task. Removing temporary files...");
                         foreach (var kvp in backups)
                         {
                             if (File.Exists(kvp.Key)) File.Delete(kvp.Key);
@@ -597,19 +505,35 @@ Options: -log LOG     Uses the file LOG as log for the activity
             }
         }
 
-        private TextReader Input;
-        private TextWriter Output;
-        void REPL(TextReader input, TextWriter output)
+        class UI
         {
-            Input = input;
-            Output = output;
+            public TextReader Input;
+            public TextWriter Output;
+
+            private string status = string.Empty;
+            public void Header() { Header(status); }
+            public void Header(string message)
+            {
+                status = message;
+                var pos = new { x = Console.CursorLeft, y = Console.CursorTop };
+                Console.SetCursorPosition(Console.WindowLeft, Console.WindowTop);
+                Console.WriteLine(("Using " + Constants.LogFilename + " as log file").PadRight(Console.BufferWidth - 1));
+                Console.WriteLine(status.PadRight(Console.BufferWidth - 1));
+                Console.WriteLine(string.Empty.PadRight(Console.BufferWidth - 1));
+                Console.SetCursorPosition(pos.x, pos.y);
+            }
+        }
+        private UI Ui;
+        void REPL(UI ui)
+        {
+            Ui = ui;
 
             string command = string.Empty;
             do
             {
-                Header();
-                Output.Write("ll > ");
-                command = (Input.ReadLine() ?? "exit").Trim();
+                ui.Header();
+                ui.Output.Write("ll > ");
+                command = (ui.Input.ReadLine() ?? "exit").Trim();
                 if (command.Equals("pause") || command.Equals("p"))
                 {
                     Pause();
@@ -700,7 +624,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
         private void Dump()
         {
-            Header("Writing " + m_activityList.Count + " activities");
+            Ui.Header("Writing " + m_activityList.Count + " activities");
 
             lock (locker)
             {
@@ -717,7 +641,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 }
                 catch (IOException e)
                 {
-                    Header("Could not write to living log");
+                    Ui.Header("Could not write to living log");
                     // Most likely to be the output file already in use
                     // Just keep storing Activities until we can access the file
                 }
