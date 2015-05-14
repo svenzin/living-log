@@ -128,7 +128,6 @@ namespace living_log_cli
             return activities.ToList();
         }
 
-        static void Swap<T>(ref T a, ref T b) { var t = a; a = b; b = t; }
         static IEnumerable<Activity> MergeIterator(IEnumerator<Activity> a, IEnumerator<Activity> b)
         {
             bool hasA = a.MoveNext();
@@ -147,8 +146,8 @@ namespace living_log_cli
                     else break;
                 }
 
-                Swap(ref a, ref b);
-                Swap(ref hasA, ref hasB);
+                Tools.Swap(ref a, ref b);
+                Tools.Swap(ref hasA, ref hasB);
             }
 
             while (hasA)
@@ -361,8 +360,8 @@ Options: -log LOG     Uses the file LOG as log for the activity
             if (LivingFile.Exists(m_filename))
             {
                 var stats = LivingFile.GetStats(m_filename);
-                Ui.Output.WriteLine("File " + m_filename + " has " + ToHumanString(stats.Length) + " bytes");
-                Ui.Output.WriteLine("File " + m_filename + " has " + ToHumanString(stats.Count) + " lines");
+                Ui.Output.WriteLine("File " + m_filename + " has " + Tools.ToHumanString(stats.Length) + " bytes");
+                Ui.Output.WriteLine("File " + m_filename + " has " + Tools.ToHumanString(stats.Count) + " lines");
             }
         }
 
@@ -387,7 +386,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                     var logger = new System.Timers.Timer();
                     logger.AutoReset = true;
                     logger.Interval = Constants.Second;
-                    logger.Elapsed += (s, e) => { Ui.Header("activities: " + ToHumanString(counter).PadRight(8) + " elapsed: " + w.Elapsed.ToString()); };
+                    logger.Elapsed += (s, e) => { Ui.Header("activities: " + Tools.ToHumanString(counter).PadRight(8) + " elapsed: " + w.Elapsed.ToString()); };
                     logger.Start();
 
                     var backups = new Dictionary<string, string>();
@@ -517,7 +516,11 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 status = message;
                 var pos = new { x = Console.CursorLeft, y = Console.CursorTop };
                 Console.SetCursorPosition(Console.WindowLeft, Console.WindowTop);
-                Console.WriteLine(("Using " + Constants.LogFilename + " as log file").PadRight(Console.BufferWidth - 1));
+                Console.WriteLine((
+                    Constants.LogFilename + " " +
+                    Tools.ToHumanString(Program.m_lastWriteCount).PadLeft(6) + " | " +
+                    Tools.ToHumanString(Program.m_count).PadLeft(6)
+                    ).PadRight(Console.BufferWidth - 1));
                 Console.WriteLine(status.PadRight(Console.BufferWidth - 1));
                 Console.WriteLine(string.Empty.PadRight(Console.BufferWidth - 1));
                 Console.SetCursorPosition(pos.x, pos.y);
@@ -560,26 +563,6 @@ Options: -log LOG     Uses the file LOG as log for the activity
             Program.ForceExit();
         }
 
-        public static string ToHumanString(long value)
-        {
-            string[] units = { "", "K", "M", "G", "T", "P", "E", "Z", "Y" };
-            int i = 0;
-            while (value >= 1000000)
-            {
-                value = value / 1000;
-                ++i;
-            }
-            double d = value;
-            if (d >= 1000)
-            {
-                d = d / 1000;
-                ++i;
-            }
-            if (d >= 100) return d.ToString("F1") + units[i];
-            else if (d >= 10) return d.ToString("F2") + units[i];
-            return d.ToString("F3") + units[i];
-        }
-        
         Program(string filename)
         {
             m_filename = filename;
@@ -587,6 +570,8 @@ Options: -log LOG     Uses the file LOG as log for the activity
             m_activityList = new List<Activity>();
 
             m_previous = new Timestamp(DateTime.UtcNow);
+            m_count = 0;
+            m_lastWriteCount = 0;
 
             m_living = new LivingLogger(Constants.SyncDelayInMs);
             m_living.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
@@ -624,7 +609,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
         private void Dump()
         {
-            Ui.Header("Writing " + m_activityList.Count + " activities");
+            Ui.Header("Logging " + m_activityList.Count + " activities...");
 
             lock (locker)
             {
@@ -637,7 +622,11 @@ Options: -log LOG     Uses the file LOG as log for the activity
                         WriteText(m_activityList, ref previous, writer);
                     }
                     m_previous = previous;
+                    m_lastWriteCount = m_activityList.Count;
+                    m_count += m_lastWriteCount;
                     m_activityList.Clear();
+                    
+                    Ui.Header("Logged " + m_activityList.Count + " activities");
                 }
                 catch (IOException e)
                 {
@@ -669,6 +658,8 @@ Options: -log LOG     Uses the file LOG as log for the activity
         }
         
         private Timestamp m_previous;
+        private static long m_count;
+        private static long m_lastWriteCount;
 
         System.Timers.Timer m_dumpTimer;
         string m_filename;
