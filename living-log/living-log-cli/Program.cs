@@ -13,8 +13,6 @@ using System.Diagnostics;
 
 namespace living_log_cli
 {
-    
-
     public static class ActivityTools
     {
         public static IEnumerable<Activity> Process(IEnumerable<Activity> source)
@@ -229,7 +227,7 @@ namespace living_log_cli
     class Program
     {
         #region Console exit handler
-        
+
         [System.Runtime.InteropServices.DllImport("Kernel32")]
         public static extern bool SetConsoleCtrlHandler(HandlerRoutine Handler, bool Add);
         public delegate bool HandlerRoutine(CtrlTypes CtrlType);
@@ -247,11 +245,11 @@ namespace living_log_cli
             exitHandler = handler;
             return SetConsoleCtrlHandler(exitHandler, true);
         }
-       
+
         #endregion
 
         #region Command line arguments handling
-       
+
         private static void Help()
         {
             Console.WriteLine(
@@ -302,9 +300,10 @@ Options: -log LOG     Uses the file LOG as log for the activity
             }
             return true;
         }
-       
+
         #endregion
 
+        private static UI ui;
         static void Main(string[] args)
         {
             if (!TryProcessingArguments(args))
@@ -322,7 +321,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
             });
 
             Console.SetCursorPosition(0, 4);
-            UI ui = new UI() { Input = Console.In, Output = Console.Out };
+            ui = new UI(Console.In, Console.Out);
             new Thread(() => { p.REPL(ui); }) { IsBackground = true }.Start();
             System.Windows.Forms.Application.Run();
 
@@ -386,7 +385,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
                     var logger = new System.Timers.Timer();
                     logger.AutoReset = true;
                     logger.Interval = Constants.Second;
-                    logger.Elapsed += (s, e) => { Ui.Header("activities: " + Tools.ToHumanString(counter).PadRight(8) + " elapsed: " + w.Elapsed.ToString()); };
+                    logger.Elapsed += (s, e) => { Ui.Status = "activities: " + Tools.ToHumanString(counter).PadRight(8) + " elapsed: " + w.Elapsed.ToString(); };
                     logger.Start();
 
                     var backups = new Dictionary<string, string>();
@@ -452,13 +451,13 @@ Options: -log LOG     Uses the file LOG as log for the activity
                             }
                         }
 
-                        Ui.Header("Split task successful.");
+                        Ui.Status = "Split task successful.";
                         foreach (var kvp in backups)
                         {
                             counter = 0;
                             w.Restart();
                             Ui.Output.WriteLine("Processing " + kvp.Key);
-                            
+
                             if (File.Exists(kvp.Value)) File.Delete(kvp.Value);
                             if (File.Exists(kvp.Key)) File.Copy(kvp.Key, kvp.Value);
 
@@ -485,11 +484,11 @@ Options: -log LOG     Uses the file LOG as log for the activity
                         {
                             // "using" makes sura that the file is properly closed and not still in use
                         }
-                        Ui.Header("Processing task successful.");
+                        Ui.Status = "Processing task successful.";
                     }
                     catch (Exception e)
                     {
-                        Ui.Header("Error during split task. Removing temporary files...");
+                        Ui.Status = "Error during split task. Removing temporary files...";
                         foreach (var kvp in backups)
                         {
                             if (File.Exists(kvp.Key)) File.Delete(kvp.Key);
@@ -508,22 +507,39 @@ Options: -log LOG     Uses the file LOG as log for the activity
         {
             public TextReader Input;
             public TextWriter Output;
+            public string Status;
+            public long Count;
+            public long Total;
 
-            private string status = string.Empty;
-            public void Header() { Header(status); }
-            public void Header(string message)
+            private System.Timers.Timer updater;
+            public UI(TextReader In, TextWriter Out)
             {
-                status = message;
-                var pos = new { x = Console.CursorLeft, y = Console.CursorTop };
+                Input = In;
+                Output = Out;
+
+                Status = string.Empty;
+                Count = 0;
+                Total = 0;
+                Header();
+
+                updater = new System.Timers.Timer();
+                updater.AutoReset = true;
+                updater.Interval = Constants.Second;
+                updater.Elapsed += (s, e) => Header();
+                updater.Start();
+            }
+
+            private void Header()
+            {
+                var x = Console.CursorLeft;
+                var y = Console.CursorTop;
+                string stats = Constants.LogFilename + " " + Tools.ToHumanString(Count).PadLeft(6) + " | " + Tools.ToHumanString(Total).PadLeft(6);
+                string sep = new string('_', Console.BufferWidth - 1);
                 Console.SetCursorPosition(Console.WindowLeft, Console.WindowTop);
-                Console.WriteLine((
-                    Constants.LogFilename + " " +
-                    Tools.ToHumanString(Program.m_lastWriteCount).PadLeft(6) + " | " +
-                    Tools.ToHumanString(Program.m_count).PadLeft(6)
-                    ).PadRight(Console.BufferWidth - 1));
-                Console.WriteLine(status.PadRight(Console.BufferWidth - 1));
-                Console.WriteLine(string.Empty.PadRight(Console.BufferWidth - 1));
-                Console.SetCursorPosition(pos.x, pos.y);
+                Console.WriteLine(stats.PadRight(Console.BufferWidth - 1));
+                Console.WriteLine(Status.PadRight(Console.BufferWidth - 1));
+                Console.WriteLine(sep.PadRight(Console.BufferWidth - 1));
+                Console.SetCursorPosition(x, y);
             }
         }
         private UI Ui;
@@ -534,7 +550,6 @@ Options: -log LOG     Uses the file LOG as log for the activity
             string command = string.Empty;
             do
             {
-                ui.Header();
                 ui.Output.Write("ll > ");
                 command = (ui.Input.ReadLine() ?? "exit").Trim();
                 if (command.Equals("pause") || command.Equals("p"))
@@ -570,8 +585,6 @@ Options: -log LOG     Uses the file LOG as log for the activity
             m_activityList = new List<Activity>();
 
             m_previous = new Timestamp(DateTime.UtcNow);
-            m_count = 0;
-            m_lastWriteCount = 0;
 
             m_living = new LivingLogger(Constants.SyncDelayInMs);
             m_living.ActivityLogged += (s, a) => { lock (locker) { m_activityList.Add(a); } };
@@ -609,7 +622,7 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
         private void Dump()
         {
-            Ui.Header("Logging " + m_activityList.Count + " activities...");
+            Ui.Status = "Logging " + m_activityList.Count + " activities...";
 
             lock (locker)
             {
@@ -622,21 +635,21 @@ Options: -log LOG     Uses the file LOG as log for the activity
                         WriteText(m_activityList, ref previous, writer);
                     }
                     m_previous = previous;
-                    m_lastWriteCount = m_activityList.Count;
-                    m_count += m_lastWriteCount;
+                    ui.Count = m_activityList.Count;
+                    ui.Total += ui.Count;
                     m_activityList.Clear();
-                    
-                    Ui.Header("Logged " + m_activityList.Count + " activities");
+
+                    Ui.Status = "Logged " + m_activityList.Count + " activities";
                 }
                 catch (IOException e)
                 {
-                    Ui.Header("Could not write to living log");
+                    Ui.Status = "Could not write to living log";
                     // Most likely to be the output file already in use
                     // Just keep storing Activities until we can access the file
                 }
             }
         }
-        
+
         void WriteText(IList<Activity> activities, ref Timestamp previous, TextWriter writer)
         {
             using (var text = new StringWriter())
@@ -652,14 +665,12 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
                     previous = a.Timestamp;
                 };
-                
+
                 writer.Write(text.ToString());
             }
         }
-        
+
         private Timestamp m_previous;
-        private static long m_count;
-        private static long m_lastWriteCount;
 
         System.Timers.Timer m_dumpTimer;
         string m_filename;
