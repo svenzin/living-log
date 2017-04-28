@@ -16,6 +16,7 @@ namespace living_log_cli
         public class KeyboardKeyData : IData
         {
             public Keys Key;
+            public KeyboardKeyData() {}
             public KeyboardKeyData(KeyEventArgsExt e) { Key = e.KeyCode; }
             public override string ToString() { return Key.ToString(); }
         }
@@ -23,6 +24,7 @@ namespace living_log_cli
         public class KeyboardPressData : IData
         {
             public char Character;
+            public KeyboardPressData() { }
             public KeyboardPressData(KeyPressEventArgsExt e) { Character = e.KeyChar; }
             public override string ToString() { return Character.ToString(); }
         }

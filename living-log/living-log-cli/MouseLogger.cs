@@ -16,6 +16,7 @@ namespace living_log_cli
         public class MouseButtonData : IData
         {
             public MouseButtons Button;
+            public MouseButtonData() {}
             public MouseButtonData(MouseEventExtArgs e) { Button = e.Button; }
             public override string ToString() { return Button.ToString(); }
         }
@@ -23,6 +24,7 @@ namespace living_log_cli
         public class MouseWheelData : IData
         {
             public int Delta;
+            public MouseWheelData() {}
             public MouseWheelData(MouseEventExtArgs e) { Delta = e.Delta; }
             public override string ToString() { return Delta.ToString(); }
         }
@@ -31,6 +33,7 @@ namespace living_log_cli
         {
             public int X;
             public int Y;
+            public MouseMoveData() {}
             public MouseMoveData(MouseEventExtArgs e) { X = e.X; Y = e.Y; }
             public override string ToString() { return X.ToString() + " " + Y.ToString(); }
         }

@@ -151,6 +151,10 @@ Options: -log LOG     Uses the file LOG as log for the activity
                         Output.WriteLine("Resumed");
                     }
                 }
+                else if (command.Equals("split"))
+                {
+                    Split();
+                }
             } while (!command.Equals("exit"));
 
             Program.ForceExit();
@@ -223,6 +227,101 @@ Options: -log LOG     Uses the file LOG as log for the activity
                     // Most likely to be the output file already in use
                     // Just keep storing Activities until we can access the file
                 }
+            }
+        }
+
+        private void Split()
+        {
+            if (Enabled)
+            {
+                Console.WriteLine("Cannot split while logging. Please pause first.");
+            }
+            else
+            {
+                if (parser.LivingFile.Exists(m_filename))
+                {
+                    Dump();
+
+                    var info = parser.LivingFile.GetInfo(m_filename);
+                    var stats = parser.LivingFile.GetStats(m_filename);
+
+                    Console.WriteLine("File " + info.Name);
+                    Console.WriteLine("    " + stats.Length + " bytes");
+                    Console.WriteLine("    " + stats.Count + " lines");
+                    Console.WriteLine("Filename pattern: " + info.BaseName + ".UTC.YYYY-MM-DD" + info.Extension);
+
+                    var date = DateTime.MinValue.Date;
+
+                    var buffer = new List<Activity>();
+                    var activities = parser.LivingFile.ReadActivities(m_filename);
+                    foreach (var a in activities)
+                    {
+                        var t = a.Timestamp.ToDateTime();
+                        if (t.Date != date && buffer.Count > 0)
+                        {
+                            var filename = info.BaseName + ".UTC." + date.ToString("yyyy-MM-dd") + info.Extension;
+                            using (var writer = new StreamWriter(File.Open(filename, FileMode.Append)))
+                            {
+                                var ts = buffer.First().Timestamp;
+                                var sync = new Activity
+                                {
+                                    Timestamp = ts,
+                                    Type = Categories.LivingLog_Sync,
+                                    Info = new LivingLogger.SyncData()
+                                    {
+                                        Timestamp = ts.ToDateTime(),
+                                        Version = "1"
+                                    }
+                                };
+                                var previous = ts;
+                                WriteText(Enumerable.Repeat(sync, 1), ref previous, writer);
+                                WriteText(buffer, ref previous, writer);
+                            }
+                            Console.WriteLine("Wrote " + buffer.Count + " activities");
+
+                            date = t.Date;
+                            buffer.Clear();
+                            Console.WriteLine("Writing to file " + info.BaseName
+                                + ".UTC." + date.ToString("yyyy-MM-dd") + info.Extension);
+                        }
+                        buffer.Add(a);
+                        //Console.Write(t);
+                        //Console.Write(" ");
+                        //Console.Write(a.Type.Id);
+                        //Console.Write(" ");
+                        //Console.Write(a.Info.ToString());
+                        //Console.WriteLine();
+                    }
+                    Console.WriteLine("Wrote " + buffer.Count + " activities");
+                }
+            }
+        }
+
+        private bool WriteText(IEnumerable<Activity> activities, ref Timestamp previous, TextWriter writer)
+        {
+            using (var text = new StringWriter())
+            {
+                try
+                {
+                    foreach (var a in activities)
+                    {
+                        text.Write(a.Timestamp - previous);
+                        text.Write(" ");
+                        text.Write(a.Type.Id);
+                        text.Write(" ");
+                        text.Write(a.Info.ToString());
+                        text.WriteLine();
+
+                        previous = a.Timestamp;
+                    };
+                }
+                catch (IOException e)
+                {
+                    return false;
+                }
+
+                writer.Write(text.ToString());
+                return true;
             }
         }
 

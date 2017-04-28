@@ -67,9 +67,14 @@
     <Compile Include="Categories.cs" />
     <Compile Include="Constants.cs" />
     <Compile Include="KeyboardLogger.cs" />
+    <Compile Include="parser\ActivityParser.cs" />
+    <Compile Include="parser\KeyboardParser.cs" />
+    <Compile Include="parser\LivingFile.cs" />
     <Compile Include="LivingLogger.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="MouseLogger.cs" />
+    <Compile Include="parser\LivingParser.cs" />
+    <Compile Include="parser\MouseParser.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Timestamp.cs" />
