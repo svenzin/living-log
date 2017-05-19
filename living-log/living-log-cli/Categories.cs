@@ -10,7 +10,9 @@ namespace living_log_cli
     {
         public static bool IsSync(Category c)
         {
-            return (c == LivingLog_Startup) || (c == LivingLog_Sync);
+            return (c == LivingLog_Startup)
+                || (c == LivingLog_Sync)
+                || (c == LivingLog_Exit);
         }
 
         public static readonly Category LivingLog_Startup = new Category() { Id = 0, Name = "LivingLog_Startup" };

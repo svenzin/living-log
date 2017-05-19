@@ -98,7 +98,10 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 return;
             }
 
+            Console.SetBufferSize(Console.WindowWidth, Console.WindowHeight);
+
             Console.WriteLine("Using " + Constants.LogFilename + " as log file");
+            Console.WriteLine();
             Console.WriteLine();
 
             System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.BelowNormal;
@@ -159,6 +162,10 @@ Options: -log LOG     Uses the file LOG as log for the activity
                 {
                     Stat();
                 }
+                else if (command.Equals("dump"))
+                {
+                    Dump();
+                }
             } while (!command.Equals("exit"));
 
             Program.ForceExit();
@@ -209,6 +216,11 @@ Options: -log LOG     Uses the file LOG as log for the activity
         private void Dump()
         {
             var pos = new { x = Console.CursorLeft, y = Console.CursorTop };
+            string blank = new string(' ', Console.BufferWidth);
+            Console.SetCursorPosition(0, 0);
+            Console.WriteLine(blank);
+            Console.WriteLine(blank);
+            Console.WriteLine(blank);
             Console.SetCursorPosition(0, 0);
             Console.WriteLine("Using " + Constants.LogFilename + " as log file");
             Console.WriteLine("Writing " + m_activityList.Count + " activities");
@@ -246,17 +258,13 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
         private void Split()
         {
-            if (Enabled)
+            var today = DateTime.UtcNow.Date;
+            if (parser.LivingFile.Exists(m_filename))
             {
-                Console.WriteLine("Cannot split while logging. Please pause first.");
-            }
-            else
-            {
-                var today = DateTime.UtcNow.Date;
-                if (parser.LivingFile.Exists(m_filename))
-                {
-                    Dump();
+                Dump();
 
+                lock (locker)
+                {
                     var info = parser.LivingFile.GetInfo(m_filename);
                     var stats = parser.LivingFile.GetStats(m_filename);
 
@@ -272,10 +280,10 @@ Options: -log LOG     Uses the file LOG as log for the activity
 
                     var buffer = new List<Activity>();
                     var activities = parser.LivingFile.ReadActivities(m_filename);
-                    foreach (var a in activities)
+
+                    Action WriteBuffer = () =>
                     {
-                        var t = a.Timestamp.ToDateTime();
-                        if (t.Date != date && buffer.Count > 0)
+                        if (buffer.Count > 0)
                         {
                             var filename = GetSplitFilename(date, today, info);
                             Console.WriteLine("Writing to file " + filename);
@@ -283,26 +291,28 @@ Options: -log LOG     Uses the file LOG as log for the activity
                             Console.WriteLine("Wrote " + buffer.Count + " activities");
                             files.Add(filename);
                             buffer.Clear();
+                        }
+                    };
 
+                    foreach (var a in activities)
+                    {
+                        var t = a.Timestamp.ToDateTime();
+                        if (t.Date != date)
+                        {
+                            WriteBuffer();
                             Console.WriteLine("Parsing " + date.ToString("yyyy-MM-dd") + "...");
                             date = t.Date;
                         }
                         buffer.Add(a);
                     }
-                    if (buffer.Count > 0)
-                    {
-                        var filename = GetSplitFilename(date, today, info);
-                        Console.WriteLine("Writing to file " + filename);
-                        success = success && WriteSplitToFile(filename, buffer);
-                        Console.WriteLine("Wrote " + buffer.Count + " activities");
-                        files.Add(filename);
-                        buffer.Clear();
-                    }
+                    WriteBuffer();
+
                     if (success)
                     {
                         Console.WriteLine("Split successful.");
                         if (File.Exists(m_filename)) File.Delete(m_filename);
-                        File.Move(GetSplitFilename(today, today, info), m_filename);
+                        var tempfile = GetSplitFilename(today, today, info);
+                        if (File.Exists(tempfile)) File.Move(tempfile, m_filename);
                     }
                     else
                     {
